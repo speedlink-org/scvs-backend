@@ -1,8 +1,92 @@
 from flask import Blueprint, request, jsonify
-from ..controllers.admin_controller import list_admins, update_admin, delete_admin
+from ..controllers.admin_controller import list_admins, update_admin, delete_admin, get_certificate_settings, update_certificate_settings
 from flasgger import swag_from
+from ..models.certificate_setting import CertificateSetting
+from flask import Response
 
 admin_bp = Blueprint('admin_bp', __name__, url_prefix='/admin')
+
+
+# -------------------------
+# GET CERTIFICATE SETTINGS
+# -------------------------
+@admin_bp.get("/certificate-settings")
+@swag_from({
+    "tags": ["Admin Management"],
+    "summary": "Get current certificate template settings",
+    "responses": {
+        "200": {"description": "Settings retrieved successfully"}
+    }
+})
+def get_certificate_settings_route():
+    return get_certificate_settings()
+
+# -------------------------
+# UPDATE CERTIFICATE SETTINGS (PATCH)
+# -------------------------
+@admin_bp.patch("/certificate-settings")
+@swag_from({
+    "tags": ["Admin Management"],
+    "summary": "Partially update certificate template settings",
+    "description": "Accepts multipart/form-data (files) or application/json.",
+    "consumes": ["multipart/form-data", "application/json"],
+    "parameters": [
+        {
+            "in": "formData",
+            "name": "logo",
+            "type": "file",
+            "description": "Logo image file"
+        },
+        {
+            "in": "formData",
+            "name": "signature",
+            "type": "file",
+            "description": "Signature image file"
+        },
+        {
+            "in": "formData",
+            "name": "title_text",
+            "type": "string",
+            "description": "Certificate title"
+        },
+        {
+            "in": "formData",
+            "name": "default_course_summary",
+            "type": "string",
+            "description": "Default write-up / course summary"
+        },
+        {
+            "in": "formData",
+            "name": "footer_text",
+            "type": "string",
+            "description": "Footer text"
+        }
+    ],
+    "responses": {
+        "200": {"description": "Settings updated"},
+        "400": {"description": "Invalid input"}
+    }
+})
+def update_certificate_settings_route():
+    return update_certificate_settings()
+
+
+# admin_routes.py
+
+@admin_bp.get("/certificate-settings/logo")
+def get_logo():
+    settings = CertificateSetting.get_instance()
+    if settings.logo_data:
+        return Response(settings.logo_data, mimetype=settings.logo_mime)
+    return "", 404
+
+@admin_bp.get("/certificate-settings/signature")
+def get_signature():
+    settings = CertificateSetting.get_instance()
+    if settings.signature_data:
+        return Response(settings.signature_data, mimetype=settings.signature_mime)
+    return "", 404
+
 
 # -------------------------
 # LIST ADMINS
