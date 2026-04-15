@@ -51,6 +51,18 @@ def get_certificate_settings_route():
         },
         {
             "in": "formData",
+            "name": "signature_name",
+            "type": "string",
+            "description": "Name of the first signatory (e.g., Training Coordinator)"
+        },
+        {
+            "in": "formData",
+            "name": "signature2_name",
+            "type": "string",
+            "description": "Name of the second signatory (e.g., Managing Consultant)"
+        },
+        {
+            "in": "formData",
             "name": "title_text",
             "type": "string",
             "description": "Certificate title"
@@ -80,6 +92,22 @@ def update_certificate_settings_route():
 # image display routes (logo / signatures)
 
 @admin_bp.get("/certificate-settings/logo")
+@swag_from({
+    "tags": ["Admin Management"],
+    "summary": "Get certificate logo image",
+    "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+    "responses": {
+        "200": {
+            "description": "Logo image",
+            "content": {
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+                "image/gif": {"schema": {"type": "string", "format": "binary"}}
+            }
+        },
+        "404": {"description": "Logo not found"}
+    }
+})
 def get_logo():
     settings = CertificateSetting.get_instance()
     if settings.logo_data:
@@ -87,6 +115,22 @@ def get_logo():
     return "", 404
 
 @admin_bp.get("/certificate-settings/signature")
+@swag_from({
+    "tags": ["Admin Management"],
+    "summary": "Get first signature image",
+    "description": "Returns the uploaded first signature image (binary). Returns 404 if not uploaded.",
+    "responses": {
+        "200": {
+            "description": "Signature image",
+            "content": {
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+                "image/gif": {"schema": {"type": "string", "format": "binary"}}
+            }
+        },
+        "404": {"description": "Signature not found"}
+    }
+})
 def get_signature():
     settings = CertificateSetting.get_instance()
     if settings.signature_data:
@@ -94,6 +138,22 @@ def get_signature():
     return "", 404
 
 @admin_bp.get("/certificate-settings/signature2")
+@swag_from({
+    "tags": ["Admin Management"],
+    "summary": "Get second signature image",
+    "description": "Returns the uploaded second signature image (binary). Returns 404 if not uploaded.",
+    "responses": {
+        "200": {
+            "description": "Second signature image",
+            "content": {
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+                "image/gif": {"schema": {"type": "string", "format": "binary"}}
+            }
+        },
+        "404": {"description": "Signature not found"}
+    }
+})
 def get_signature2():
     settings = CertificateSetting.get_instance()
     if settings.signature2_data:

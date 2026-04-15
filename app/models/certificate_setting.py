@@ -14,10 +14,12 @@ class CertificateSetting(db.Model):
     # first signature 
     signature_data = db.Column(db.LargeBinary, nullable=True)
     signature_mime = db.Column(db.String(100), nullable=True)
+    signature_name = db.Column(db.String(200), nullable=True)   # NEW
     
     # Second signature (new)
     signature2_data = db.Column(db.LargeBinary, nullable=True)
     signature2_mime = db.Column(db.String(100), nullable=True)
+    signature2_name = db.Column(db.String(200), nullable=True)  # NEW
     
     # Text fields
     title_text = db.Column(db.String(200), default="Certificate of Completion")
