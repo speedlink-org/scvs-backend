@@ -28,6 +28,10 @@ def get_certificate_settings():
     return jsonify({
         "logo_exists": bool(settings.logo_data),
         "logo_mime": settings.logo_mime,
+        "logo2_exists": bool(settings.logo2_data),
+        "logo2_mime": settings.logo2_mime,
+        "logo3_exists": bool(settings.logo3_data),
+        "logo3_mime": settings.logo3_mime,
         "signature_exists": bool(settings.signature_data),
         "signature_mime": settings.signature_mime,
         "signature_name": settings.signature_name,            # NEW
@@ -69,6 +73,18 @@ def update_certificate_settings():
         if logo_file and logo_file.filename:
             settings.logo_data = logo_file.read()  # read bytes
             settings.logo_mime = logo_file.mimetype
+
+    if 'logo2' in request.files:
+        file = request.files['logo2']
+        if file and file.filename:
+            settings.logo2_data = file.read()
+            settings.logo2_mime = file.mimetype
+    
+    if 'logo3' in request.files:
+        file = request.files['logo3']
+        if file and file.filename:
+            settings.logo3_data = file.read()
+            settings.logo3_mime = file.mimetype
     
     if 'signature' in request.files:
         sig_file = request.files['signature']
@@ -96,6 +112,8 @@ def update_certificate_settings():
     return jsonify({
         "message": "Certificate settings updated successfully",
         "logo_exists": bool(settings.logo_data),
+        "logo2_exists": bool(settings.logo2_data),
+        "logo3_exists": bool(settings.logo3_data),
         "signature_exists": bool(settings.signature_data),
         "signature_name": settings.signature_name,
         "signature2_exists": bool(settings.signature2_data),

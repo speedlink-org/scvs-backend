@@ -11,6 +11,12 @@ class CertificateSetting(db.Model):
     logo_data = db.Column(db.LargeBinary, nullable=True)
     logo_mime = db.Column(db.String(100), nullable=True)   # e.g., 'image/png'
     
+    logo2_data = db.Column(db.LargeBinary, nullable=True)   # NEW
+    logo2_mime = db.Column(db.String(100), nullable=True)   # NEW
+    
+    logo3_data = db.Column(db.LargeBinary, nullable=True)   # NEW
+    logo3_mime = db.Column(db.String(100), nullable=True)   # NEW
+    
     # first signature 
     signature_data = db.Column(db.LargeBinary, nullable=True)
     signature_mime = db.Column(db.String(100), nullable=True)

@@ -114,6 +114,54 @@ def get_logo():
         return Response(settings.logo_data, mimetype=settings.logo_mime)
     return "", 404
 
+
+@admin_bp.get("/certificate-settings/logo2")
+@swag_from({
+    "tags": ["Admin Management"],
+    "summary": "Get second certificate logo image",
+    "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+    "responses": {
+        "200": {
+            "description": "2nd Logo image",
+            "content": {
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+                "image/gif": {"schema": {"type": "string", "format": "binary"}}
+            }
+        },
+        "404": {"description": "Logo not found"}
+    }
+})
+def get_logo2():
+    settings = CertificateSetting.get_instance()
+    if settings.logo2_data:
+        return Response(settings.logo2_data, mimetype=settings.logo2_mime)
+    return "", 404
+
+@admin_bp.get("/certificate-settings/logo3")
+@swag_from({
+    "tags": ["Admin Management"],
+    "summary": "Get third certificate logo image",
+    "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+    "responses": {
+        "200": {
+            "description": "3rd Logo image",
+            "content": {
+                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+                "image/png": {"schema": {"type": "string", "format": "binary"}},
+                "image/gif": {"schema": {"type": "string", "format": "binary"}}
+            }
+        },
+        "404": {"description": "Logo not found"}
+    }
+})
+def get_logo3():
+    settings = CertificateSetting.get_instance()
+    if settings.logo3_data:
+        return Response(settings.logo3_data, mimetype=settings.logo3_mime)
+    return "", 404
+
+
 @admin_bp.get("/certificate-settings/signature")
 @swag_from({
     "tags": ["Admin Management"],
