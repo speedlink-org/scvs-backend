@@ -41,7 +41,13 @@ def get_certificate_settings_route():
             "in": "formData",
             "name": "signature",
             "type": "file",
-            "description": "Signature image file"
+            "description": "Signature image file (e.g., Training coordinator file)"
+        },
+         {
+            "in": "formData",
+            "name": "signature2",
+            "type": "file",
+            "description": "Second signature image file (e.g., managing consultant)"
         },
         {
             "in": "formData",
@@ -71,7 +77,7 @@ def update_certificate_settings_route():
     return update_certificate_settings()
 
 
-# admin_routes.py
+# image display routes (logo / signatures)
 
 @admin_bp.get("/certificate-settings/logo")
 def get_logo():
@@ -85,6 +91,13 @@ def get_signature():
     settings = CertificateSetting.get_instance()
     if settings.signature_data:
         return Response(settings.signature_data, mimetype=settings.signature_mime)
+    return "", 404
+
+@admin_bp.get("/certificate-settings/signature2")
+def get_signature2():
+    settings = CertificateSetting.get_instance()
+    if settings.signature2_data:
+        return Response(settings.signature2_data, mimetype=settings.signature2_mime)
     return "", 404
 
 
