@@ -37,6 +37,7 @@ def list_students_route():
             "schema": {
                 "type": "object",
                 "properties": {
+                    "full_name": {"type": "string"},
                     "first_name": {"type": "string"},
                     "last_name": {"type": "string"},
                     "email": {"type": "string"},

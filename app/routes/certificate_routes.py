@@ -19,6 +19,7 @@ certificate_bp = Blueprint('certificate_bp', __name__, url_prefix='/certificate'
             "schema": {
                 "type": "object",
                 "properties": {
+                    "full_name": {"type": "string"},
                     "first_name": {"type": "string"},
                     "last_name": {"type": "string"},
                     "course_name": {"type": "string"},
@@ -82,6 +83,7 @@ def list_cert():
             "schema": {
                 "type": "object",
                 "properties": {
+                    "full_name": {"type": "string"},
                     "first_name": {"type": "string"},
                     "last_name": {"type": "string"},
                     "course_name": {"type": "string"},

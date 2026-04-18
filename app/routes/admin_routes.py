@@ -69,6 +69,12 @@ def get_certificate_settings_route():
         },
         {
             "in": "formData",
+            "name": "certificate_duration_text",
+            "type": "string",
+            "description": "Certificate duration text (e.g., 'For Successfully Completing a Six(6) Months Professional Training in')"
+        },
+        {
+            "in": "formData",
             "name": "default_course_summary",
             "type": "string",
             "description": "Default write-up / course summary"

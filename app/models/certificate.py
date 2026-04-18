@@ -8,6 +8,7 @@ class Certificate(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     student_first_name = db.Column(db.String(100), nullable=False)
     student_last_name = db.Column(db.String(100), nullable=False)
+    student_full_name = db.Column(db.String(100), nullable=True) #new
     course_name = db.Column(db.String(255), nullable=False)
     course_summary = db.Column(db.Text, nullable=True)
     year_of_study = db.Column(db.String(20), nullable=True)

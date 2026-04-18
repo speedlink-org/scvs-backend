@@ -35,10 +35,13 @@ def get_certificate_settings():
         "signature_exists": bool(settings.signature_data),
         "signature_mime": settings.signature_mime,
         "signature_name": settings.signature_name,            # NEW
+        "signature_holder_position": settings.signature_holder_position,  # NEW
         "signature2_exists": bool(settings.signature2_data),
         "signature2_mime": settings.signature2_mime,
         "signature2_name": settings.signature2_name,          # NEW
+        "signature2_holder_position": settings.signature2_holder_position,  # NEW
         "title_text": settings.title_text,
+        "Certificate_duration_text": settings.Certificate_duration_text,  # NEW
         "default_course_summary": settings.default_course_summary,
         "footer_text": settings.footer_text,
         "updated_at": settings.updated_at
@@ -52,19 +55,25 @@ def update_certificate_settings():
     if request.content_type and 'application/json' in request.content_type:
         data = request.get_json()
         settings.title_text = data.get('title_text', settings.title_text)
+        settings.Certificate_duration_text = data.get('Certificate_duration_text', settings.Certificate_duration_text)  # NEW
         settings.default_course_summary = data.get('default_course_summary', settings.default_course_summary)
         settings.footer_text = data.get('footer_text', settings.footer_text)
         # NEW: signature names from JSON
         settings.signature_name = data.get('signature_name', settings.signature_name)
-        settings.signature2_name = data.get('signature2_name', settings.signature2_name)
+        settings.signature_holder_position = data.get('signature_holder_position', settings.signature_holder_position)  # NEW
 
+        settings.signature2_name = data.get('signature2_name', settings.signature2_name)
+        settings.signature2_holder_position = data.get('signature2_holder_position', settings.signature2_holder_position)  # NEW
         db.session.commit()
         return jsonify({"message": "Certificate settings updated", "settings": {
             "title_text": settings.title_text,
+            "Certificate_duration_text": settings.Certificate_duration_text,  # NEW
             "default_course_summary": settings.default_course_summary,
             "footer_text": settings.footer_text,
             "signature_name": settings.signature_name,
-            "signature2_name": settings.signature2_name
+            "signature_holder_position": settings.signature_holder_position,  # NEW
+            "signature2_name": settings.signature2_name,
+            "signature2_holder_position": settings.signature2_holder_position  # NEW
         }})
     
     # Handle multipart/form-data for file uploads
@@ -101,11 +110,14 @@ def update_certificate_settings():
     
     # Text fields from form data
     settings.title_text = request.form.get('title_text', settings.title_text)
+    settings.Certificate_duration_text = request.form.get('Certificate_duration_text', settings.Certificate_duration_text)  # NEW
     settings.default_course_summary = request.form.get('default_course_summary', settings.default_course_summary)
     settings.footer_text = request.form.get('footer_text', settings.footer_text)
     # NEW: signature names from form data
     settings.signature_name = request.form.get('signature_name', settings.signature_name)
+    settings.signature_holder_position = request.form.get('signature_holder_position', settings.signature_holder_position)  # NEW
     settings.signature2_name = request.form.get('signature2_name', settings.signature2_name)
+    settings.signature2_holder_position = request.form.get('signature2_holder_position', settings.signature2_holder_position)  # NEW
 
     
     db.session.commit()
@@ -116,8 +128,11 @@ def update_certificate_settings():
         "logo3_exists": bool(settings.logo3_data),
         "signature_exists": bool(settings.signature_data),
         "signature_name": settings.signature_name,
+        "signature_holder_position": settings.signature_holder_position,  # NEW
         "signature2_exists": bool(settings.signature2_data),
         "signature2_name": settings.signature2_name,
+        "signature2_holder_position": settings.signature2_holder_position,  # NEW
+        "certificate_duration_text": settings.Certificate_duration_text,  # NEW
         "title_text": settings.title_text,
         "default_course_summary": settings.default_course_summary,
         "footer_text": settings.footer_text

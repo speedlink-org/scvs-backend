@@ -21,14 +21,18 @@ class CertificateSetting(db.Model):
     signature_data = db.Column(db.LargeBinary, nullable=True)
     signature_mime = db.Column(db.String(100), nullable=True)
     signature_name = db.Column(db.String(200), nullable=True)   # NEW
+    signature_holder_position = db.Column(db.String(200), nullable=True)   # NEW
     
     # Second signature (new)
     signature2_data = db.Column(db.LargeBinary, nullable=True)
     signature2_mime = db.Column(db.String(100), nullable=True)
     signature2_name = db.Column(db.String(200), nullable=True)  # NEW
+    signature2_holder_position = db.Column(db.String(200), nullable=True)   # NEW
+
     
     # Text fields
     title_text = db.Column(db.String(200), default="Certificate of Completion")
+    Certificate_duration_text = db.Column(db.String(200), default="For Successfully Completing a Six(6) Months Professional Training in")
     default_course_summary = db.Column(db.Text, nullable=True)
     footer_text = db.Column(db.String(300), nullable=True)
     
