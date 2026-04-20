@@ -13,6 +13,26 @@ from datetime import datetime
 import re
 from ..utils.google_drive_simple import drive_service 
 import os
+from datetime import datetime
+
+def parse_flexible_date(date_str, year_str):
+    """
+    Parse a date string like "Monday 2nd, March" and combine with a year (e.g., "2026").
+    Returns a date object or None if parsing fails.
+    """
+    if not date_str or not year_str:
+        return None
+    # Remove ordinal suffixes (st, nd, rd, th)
+    cleaned = re.sub(r'(\d)(st|nd|rd|th)', r'\1', date_str)
+    # Try to parse with day, month, year
+    for fmt in ['%A %d, %B', '%A %d %B', '%d %B', '%B %d']:
+        try:
+            dt = datetime.strptime(cleaned, fmt)
+            # Replace year with the provided year
+            return dt.replace(year=int(year_str)).date()
+        except ValueError:
+            continue
+    return None
 
 # Helper function to extract Google Drive file ID
 def extract_file_id_from_url(url):
@@ -137,88 +157,6 @@ def create_certificate():
     }), 201
 
 
-# def create_certificate():
-#     data = request.get_json()
-
-#     first_name = data.get("first_name")
-#     last_name = data.get("last_name")
-#     course_name = data.get("course_name")
-#     course_summary = data.get("course_summary")
-#     year_of_study = data.get("year_of_study")
-#     issuance_date_str = data.get("issuance_date")  # This comes as string from frontend
-    
-#     # Convert issuance_date string to date object
-#     if issuance_date_str:
-#         try:
-#             # Handle different date formats (YYYY-MM-DD, DD/MM/YYYY, etc.)
-#             issuance_date = datetime.strptime(issuance_date_str, '%Y-%m-%d').date()
-#         except ValueError:
-#             try:
-#                 issuance_date = datetime.strptime(issuance_date_str, '%d/%m/%Y').date()
-#             except ValueError:
-#                 # If parsing fails, use current date
-#                 issuance_date = datetime.now().date()
-#     else:
-#         # If no date provided, use current date
-#         issuance_date = datetime.now().date()
-
-#     # NEW: Find or create student
-#     student = Student.query.filter_by(
-#         first_name=first_name,
-#         last_name=last_name,
-#         email=data.get("email")  # You might want to add email to your form
-#     ).first()
-    
-#     # If student doesn't exist, create one
-#     if not student:
-#         student = Student(
-#             first_name=first_name,
-#             last_name=last_name,
-#             email=data.get("email", f"{first_name}.{last_name}@Speedlinkng.com"),  # Default email
-#             phone_number=data.get("phone_number"),
-#             course_name=course_name,
-#             year_of_study=year_of_study
-#         )
-#         db.session.add(student)
-#         db.session.flush()  # This gets the student ID without committing
-
-#     # Generate cert number
-#     certificate_number = generate_certificate_number(course_name, issuance_date)
-
-#     # Generate QR - now passing date object instead of string
-#     full_name = first_name + " " + last_name
-#     qr_url = generate_certificate_qr(
-#         f"{first_name} {last_name}",
-#         course_name,
-#         certificate_number,
-#         issuance_date  # Now this is a date object, not a string
-#     )
-
-#     cert = Certificate(
-#         student_id=student.id,  # NEW: Add student_id
-#         student_first_name=first_name,  # Keep for backward compatibility
-#         student_last_name=last_name,    # Keep for backward compatibility
-#         course_name=course_name,
-#         course_summary=course_summary,
-#         year_of_study=year_of_study,
-#         verification_code=certificate_number,
-#         # qr_code_url=qr_path,
-#         qr_code_url=qr_url,
-
-#         issued_at=issuance_date,  # Use the date object here too
-#     )
-
-#     db.session.add(cert)
-#     db.session.commit()
-
-#     return jsonify({
-#         "message": "Certificate created successfully",
-#         "certificate_number": certificate_number,
-#         "student_id": student.id,  # NEW: Return student ID
-#         "qr_code_url": qr_url
-#     }), 201
-
-
 # ===================================
 # PAGINATED LIST (Optimized, no N+1)
 # ===================================
@@ -228,7 +166,7 @@ def list_certificates():
     for cert in certs:
         result.append({
             "id": cert.id,
-            "student_id": cert.student_id,
+            # "student_id": cert.student_id,
             "student_full_name": cert.student_full_name or f"{cert.student_first_name} {cert.student_last_name}",
             "student_first_name": cert.student_first_name,
             "student_last_name": cert.student_last_name,
@@ -238,37 +176,6 @@ def list_certificates():
         })
     return jsonify(result)
 
-# def list_certificates():
-#     # Remove pagination
-#     query = Certificate.query.options(
-#         joinedload(Certificate.student)
-#     ).order_by(Certificate.created_at.desc())
-
-#     # Get all certificates
-#     all_certificates = query.all()
-
-#     return jsonify({
-#         "certificates": [
-#             {
-#                 "id": c.id,
-#                 "student_id": c.student_id,
-#                 "student_name": f"{c.student_first_name} {c.student_last_name}",
-#                 "course_name": c.course_name,
-#                 "verification_code": c.verification_code,
-#                 "issued_at": c.issued_at.strftime("%a, %d %b %Y") if c.issued_at else None,
-#                 "qr_code_url": c.qr_code_url,
-#                 "student_email": c.student.email if c.student else None,
-#                 "year_of_study": c.year_of_study,
-#                 "course_summary": c.course_summary
-#             }
-#             for c in all_certificates
-#         ],
-#         "count": len(all_certificates)
-#     })
-
-# ===================================
-# EDIT CERTIFICATE
-# ===================================
 
 # ===================================
 # EDIT CERTIFICATE (UPDATES ALL FIELDS, NO QR REGENERATION)
@@ -442,137 +349,6 @@ def update_certificate(code):
     return jsonify(response_data)
 
 
-# # ===================================
-# # EDIT CERTIFICATE (UPDATES ALL FIELDS, NO QR)
-# # ===================================
-# def update_certificate(code):
-#     # Find certificate by verification code
-#     cert = Certificate.query.filter_by(verification_code=code).first()
-    
-#     if not cert:
-#         return jsonify({"error": "Certificate not found"}), 404
-    
-#     data = request.get_json()
-    
-#     # Track what changes were made
-#     changes = {}
-    
-#     # Store old values for comparison
-#     old_values = {
-#         "verification_code": cert.verification_code,
-#         "student_first_name": cert.student_first_name,
-#         "student_last_name": cert.student_last_name,
-#         "course_name": cert.course_name,
-#         "course_summary": cert.course_summary,
-#         "year_of_study": cert.year_of_study
-#     }
-    
-#     # 1. Update verification_code if provided
-#     new_verification_code = data.get("verification_code")
-#     if new_verification_code and new_verification_code != cert.verification_code:
-#         # Check if new code already exists for another certificate
-#         existing = Certificate.query.filter_by(verification_code=new_verification_code).first()
-#         if existing and existing.id != cert.id:
-#             return jsonify({
-#                 "error": f"Verification code '{new_verification_code}' already exists for another certificate"
-#             }), 400
-        
-#         changes["verification_code"] = {
-#             "from": cert.verification_code,
-#             "to": new_verification_code
-#         }
-#         cert.verification_code = new_verification_code
-    
-#     # 2. Update student first name if provided
-#     new_first_name = data.get("first_name")
-#     if new_first_name and new_first_name != cert.student_first_name:
-#         changes["first_name"] = {
-#             "from": cert.student_first_name,
-#             "to": new_first_name
-#         }
-#         cert.student_first_name = new_first_name
-    
-#     # 3. Update student last name if provided
-#     new_last_name = data.get("last_name")
-#     if new_last_name and new_last_name != cert.student_last_name:
-#         changes["last_name"] = {
-#             "from": cert.student_last_name,
-#             "to": new_last_name
-#         }
-#         cert.student_last_name = new_last_name
-    
-#     # 4. Update course name if provided
-#     new_course_name = data.get("course_name")
-#     if new_course_name and new_course_name != cert.course_name:
-#         changes["course_name"] = {
-#             "from": cert.course_name,
-#             "to": new_course_name
-#         }
-#         cert.course_name = new_course_name
-    
-#     # 5. Update course summary if provided
-#     new_course_summary = data.get("course_summary")
-#     if new_course_summary is not None and new_course_summary != cert.course_summary:
-#         changes["course_summary"] = {
-#             "from": cert.course_summary,
-#             "to": new_course_summary
-#         }
-#         cert.course_summary = new_course_summary
-    
-#     # 6. Update year of study if provided
-#     new_year_of_study = data.get("year_of_study")
-#     if new_year_of_study and new_year_of_study != cert.year_of_study:
-#         changes["year_of_study"] = {
-#             "from": cert.year_of_study,
-#             "to": new_year_of_study
-#         }
-#         cert.year_of_study = new_year_of_study
-    
-#     # 7. Update student email (if you have this field)
-#     # Note: This depends on your model structure
-#     # If email is in Certificate model:
-#     # new_email = data.get("email")
-#     # if new_email and new_email != cert.email:
-#     #     changes["email"] = {"from": cert.email, "to": new_email}
-#     #     cert.email = new_email
-    
-#     # SKIP QR CODE REGENERATION - Comment out or remove this block entirely
-#     # if (cert.student_first_name != old_values["student_first_name"] or 
-#     #     cert.student_last_name != old_values["student_last_name"] or 
-#     #     cert.course_name != old_values["course_name"] or
-#     #     cert.verification_code != old_values["verification_code"]):
-#     #     
-#     #     # Delete old QR code from Google Drive
-#     #     if cert.qr_code_url and 'google.com' in cert.qr_code_url:
-#     #         drive_service.delete_file_by_url(cert.qr_code_url)
-#     #     
-#     #     # Generate new QR code
-#     #     new_qr_url = generate_certificate_qr(
-#     #         f"{cert.student_first_name} {cert.student_last_name}",
-#     #         cert.course_name,
-#     #         cert.verification_code,
-#     #         cert.issued_at
-#     #     )
-#     #     cert.qr_code_url = new_qr_url
-    
-#     db.session.commit()
-    
-#     # Prepare response
-#     response_data = {
-#         "success": True,
-#         "message": "Certificate updated successfully",
-#         "certificate_id": cert.id,
-#         "verification_code": cert.verification_code,
-#         "changes": changes if changes else "No changes made"
-#     }
-    
-#     # Only add QR URL if it exists and wasn't regenerated
-#     if cert.qr_code_url:
-#         response_data["qr_code_url"] = cert.qr_code_url
-#         response_data["note"] = "QR code not regenerated during update"
-    
-#     return jsonify(response_data)
-
 # ===================================
 # DELETE CERTIFICATE
 # ===================================
@@ -588,21 +364,20 @@ def delete_certificate(code):
 
     return jsonify({"message": "Certificate deleted successfully"})
 
+
+
 def import_certificates_csv():
     file = request.files.get("file")
     if not file:
         return jsonify({"error": "File is required"}), 400
 
     default_course = request.form.get("default_course", "").strip()
-    if not default_course:
-        return jsonify({"error": "Please provide a 'default_course' parameter"}), 400
-
     default_year = request.form.get("default_year", "2026").strip()
 
     filename = file.filename.lower()
     created_count = 0
     errors = []
-    rows = []   # will hold the parsed data
+    rows = []
     detected_columns = {}
 
     # ---------- Helper to find column ----------
@@ -615,354 +390,335 @@ def import_certificates_csv():
                     return col
         return default
 
-    try:
-        # ---------- Read file (CSV or Excel) ----------
-        if filename.endswith('.csv'):
-            # Save temporarily to handle encoding
-            filepath = os.path.join("tmp", file.filename)
-            os.makedirs("tmp", exist_ok=True)
-            file.save(filepath)
+    # --- Read file (same as before) ---
+    # ... (keep the reading code that populates `rows`) ...
 
-            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
-            data = None
-            for enc in encodings:
-                try:
-                    with open(filepath, 'r', encoding=enc) as f:
-                        data = f.read()
-                    break
-                except UnicodeDecodeError:
-                    continue
-            if data is None:
-                return jsonify({"error": "Could not decode CSV file"}), 400
+    # --- Detect columns (add new ones) ---
+    name_col = find_column(['name', 'full', 'student', 'names'], rows[0].keys()[0] if rows else None)
+    phone_col = find_column(['phone', 'mobile', 'contact', 'phoneno'], None)
+    cert_col = find_column(['certificate', 'cert', 'code', 'number', 'certificate code'], None)
+    programme_col = find_column(['programme', 'program', 'course'], None)
+    start_date_col = find_column(['start', 'start date', 'begin'], None)
+    end_date_col = find_column(['end', 'end date', 'finish'], None)
+    year_col = find_column(['year'], None)
 
-            # Detect delimiter
-            delimiter = ',' if ',' in data[:1000] else '\t' if '\t' in data[:1000] else ';'
-            stream = StringIO(data)
-            reader = csv.DictReader(stream, delimiter=delimiter)
-            rows = list(reader)
-            os.remove(filepath)
+    detected_columns = {
+        "name_column": name_col,
+        "phone_column": phone_col,
+        "certificate_column": cert_col,
+        "programme_column": programme_col,
+        "start_date_column": start_date_col,
+        "end_date_column": end_date_col,
+        "year_column": year_col,
+        "used_default_course": default_course,
+        "used_default_year": default_year
+    }
 
-        elif filename.endswith(('.xlsx', '.xls')):
-            import pandas as pd
-            df = pd.read_excel(file)
-            rows = df.replace({pd.NA: None, float('nan'): None}).to_dict('records')
-        else:
-            return jsonify({"error": "Unsupported file format. Use CSV or Excel."}), 400
+    if not name_col:
+        return jsonify({"error": "No name column found", "detected_columns": detected_columns}), 400
+    if not cert_col:
+        return jsonify({"error": "No certificate code column found", "detected_columns": detected_columns}), 400
 
-        if not rows:
-            return jsonify({"error": "No data found in file"}), 400
-
-        # ---------- Detect column names ----------
-        name_col = find_column(['name', 'full', 'student', 'names'], rows[0].keys()[0] if rows else None)
-        phone_col = find_column(['phone', 'mobile', 'contact', 'phoneno'], None)
-        cert_col = find_column(['certificate', 'cert', 'code', 'number', 'certificate code'], None)
-
-        detected_columns = {
-            "name_column": name_col,
-            "phone_column": phone_col,
-            "certificate_column": cert_col,
-            "used_default_course": default_course,
-            "used_default_year": default_year
-        }
-
-        if not name_col:
-            return jsonify({"error": "No name column found", "detected_columns": detected_columns}), 400
-        if not cert_col:
-            return jsonify({"error": "No certificate code column found", "detected_columns": detected_columns}), 400
-
-        # ---------- Process each row ----------
-        for idx, row in enumerate(rows, start=1):
-            try:
-                full_name = str(row.get(name_col, '')).strip()
-                if not full_name:
-                    errors.append(f"Row {idx}: empty name")
-                    continue
-
-                cert_num = str(row.get(cert_col, '')).strip()
-                if not cert_num:
-                    # Generate a new certificate number if not provided
-                    cert_num = generate_certificate_number(default_course, datetime.now().date())
-                else:
-                    # Check for duplicate
-                    existing = Certificate.query.filter_by(verification_code=cert_num).first()
-                    if existing:
-                        errors.append(f"Row {idx}: Certificate number '{cert_num}' already exists for {existing.student_full_name}")
-                        continue
-
-                # Split full name into first/last
-                parts = full_name.split(maxsplit=1)
-                first_name = parts[0]
-                last_name = parts[1] if len(parts) > 1 else ""
-
-                # Phone (optional)
-                phone = str(row.get(phone_col, '')).strip() if phone_col else None
-                if phone in ('', 'None'): phone = None
-
-                # Find or create student
-                student = Student.query.filter(
-                    (Student.full_name == full_name) |
-                    (Student.first_name == first_name and Student.last_name == last_name)
-                ).first()
-
-                if not student:
-                    # Generate unique email
-                    base_email = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}@speedlinkng.com"
-                    email = base_email
-                    counter = 1
-                    while Student.query.filter_by(email=email).first():
-                        email = f"{base_email.split('@')[0]}{counter}@speedlinkng.com"
-                        counter += 1
-
-                    student = Student(
-                        first_name=first_name,
-                        last_name=last_name,
-                        full_name=full_name,
-                        email=email,
-                        phone_number=phone,
-                        course_name=default_course,
-                        year_of_study=default_year
-                    )
-                    db.session.add(student)
-                    db.session.flush()  # get student.id
-
-                    # Generate student_id (if you have that function)
-                    try:
-                        from ..utils.student_id_generator import generate_student_id
-                        student.student_id = generate_student_id(default_year, default_course)
-                    except ImportError:
-                        # Fallback: generate a simple ID
-                        student.student_id = f"STU/{default_year}/{student.id:04d}"
-
-                # Create certificate (no QR code)
-                cert = Certificate(
-                    student_id=student.id,
-                    student_first_name=first_name,
-                    student_last_name=last_name,
-                    student_full_name=full_name,
-                    course_name=default_course,
-                    course_summary=f"Certificate for {default_course}",
-                    year_of_study=default_year,
-                    verification_code=cert_num,
-                    qr_code_url=None,          # Not generating QR anymore
-                    issued_at=datetime.now().date()
-                )
-                db.session.add(cert)
-                created_count += 1
-
-            except Exception as e:
-                errors.append(f"Row {idx}: {str(e)}")
+    # --- Process rows ---
+    for idx, row in enumerate(rows, start=1):
+        try:
+            full_name = str(row.get(name_col, '')).strip()
+            if not full_name:
+                errors.append(f"Row {idx}: empty name")
                 continue
 
-        db.session.commit()
-        return jsonify({
-            "message": f"Imported {created_count} certificates",
-            "errors": errors,
-            "detected_columns": detected_columns
-        })
+            cert_num = str(row.get(cert_col, '')).strip()
+            if not cert_num:
+                cert_num = generate_certificate_number(default_course, datetime.now().date())
+            else:
+                existing = Certificate.query.filter_by(verification_code=cert_num).first()
+                if existing:
+                    errors.append(f"Row {idx}: Certificate number '{cert_num}' already exists")
+                    continue
 
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": f"Processing failed: {str(e)}"}), 500
+            # Split name
+            parts = full_name.split(maxsplit=1)
+            first_name = parts[0]
+            last_name = parts[1] if len(parts) > 1 else ""
 
+            # Phone
+            phone = str(row.get(phone_col, '')).strip() if phone_col else None
+            if phone in ('', 'None'): phone = None
 
+            # Course and year from file or defaults
+            course_name = default_course
+            if programme_col:
+                file_course = str(row.get(programme_col, '')).strip()
+                if file_course:
+                    course_name = file_course
+
+            year_of_study = default_year
+            if year_col:
+                file_year = str(row.get(year_col, '')).strip()
+                if file_year:
+                    year_of_study = file_year
+
+            # Dates (optional)
+            start_date = None
+            end_date = None
+            if start_date_col and year_col:
+                start_str = str(row.get(start_date_col, '')).strip()
+                year_str = str(row.get(year_col, '')).strip()
+                if start_str and year_str:
+                    start_date = parse_flexible_date(start_str, year_str)
+            if end_date_col and year_col:
+                end_str = str(row.get(end_date_col, '')).strip()
+                year_str = str(row.get(year_col, '')).strip()
+                if end_str and year_str:
+                    end_date = parse_flexible_date(end_str, year_str)
+
+            # Find or create student
+            student = Student.query.filter(
+                (Student.full_name == full_name) |
+                (Student.first_name == first_name and Student.last_name == last_name)
+            ).first()
+
+            if not student:
+                base_email = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}@speedlinkng.com"
+                email = base_email
+                counter = 1
+                while Student.query.filter_by(email=email).first():
+                    email = f"{base_email.split('@')[0]}{counter}@speedlinkng.com"
+                    counter += 1
+
+                student = Student(
+                    first_name=first_name,
+                    last_name=last_name,
+                    full_name=full_name,
+                    email=email,
+                    phone_number=phone,
+                    course_name=course_name,
+                    year_of_study=year_of_study,
+                    program_start_date=start_date,
+                    program_end_date=end_date
+                )
+                db.session.add(student)
+                db.session.flush()
+
+                # Generate student_id
+                try:
+                    from ..utils.student_id_generator import generate_student_id
+                    student.student_id = generate_student_id(year_of_study, course_name)
+                except ImportError:
+                    student.student_id = f"STU/{year_of_study}/{student.id:04d}"
+            else:
+                # Update student fields if they are missing and we have new info
+                if not student.phone_number and phone:
+                    student.phone_number = phone
+                if not student.program_start_date and start_date:
+                    student.program_start_date = start_date
+                if not student.program_end_date and end_date:
+                    student.program_end_date = end_date
+                # Optionally update course name and year if they differ? Usually not.
+
+            # Create certificate
+            cert = Certificate(
+                student_id=student.id,
+                student_first_name=first_name,
+                student_last_name=last_name,
+                student_full_name=full_name,
+                course_name=course_name,
+                course_summary=f"Certificate for {course_name}",
+                year_of_study=year_of_study,
+                verification_code=cert_num,
+                qr_code_url=None,
+                issued_at=datetime.now().date()
+            )
+            db.session.add(cert)
+            created_count += 1
+
+        except Exception as e:
+            errors.append(f"Row {idx}: {str(e)}")
+            continue
+
+    db.session.commit()
+    return jsonify({
+        "message": f"Imported {created_count} certificates",
+        "errors": errors,
+        "detected_columns": detected_columns
+    })
 
 # def import_certificates_csv():
 #     file = request.files.get("file")
-
 #     if not file:
 #         return jsonify({"error": "File is required"}), 400
+
+#     default_course = request.form.get("default_course", "").strip()
+#     if not default_course:
+#         return jsonify({"error": "Please provide a 'default_course' parameter"}), 400
+
+#     default_year = request.form.get("default_year", "2026").strip()
 
 #     filename = file.filename.lower()
 #     created_count = 0
 #     errors = []
+#     rows = []   # will hold the parsed data
+#     detected_columns = {}
+
+#     # ---------- Helper to find column ----------
+#     def find_column(patterns, default=None):
+#         available = list(rows[0].keys()) if rows else []
+#         for col in available:
+#             col_lower = col.lower().strip()
+#             for pat in patterns:
+#                 if pat in col_lower:
+#                     return col
+#         return default
 
 #     try:
-#         # Handle CSV files
+#         # ---------- Read file (CSV or Excel) ----------
 #         if filename.endswith('.csv'):
-#             file_content = file.read()
+#             # Save temporarily to handle encoding
+#             filepath = os.path.join("tmp", file.filename)
+#             os.makedirs("tmp", exist_ok=True)
+#             file.save(filepath)
+
 #             encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
-#             decoded_content = None
-            
-#             for encoding in encodings:
+#             data = None
+#             for enc in encodings:
 #                 try:
-#                     decoded_content = file_content.decode(encoding)
+#                     with open(filepath, 'r', encoding=enc) as f:
+#                         data = f.read()
 #                     break
 #                 except UnicodeDecodeError:
 #                     continue
-            
-#             if decoded_content is None:
-#                 return jsonify({"error": "Unable to decode CSV file. Try saving as UTF-8."}), 400
-            
-#             stream = StringIO(decoded_content)
-            
-#             # Try different delimiters
-#             sample = decoded_content[:1000]
-#             delimiter = ',' if ',' in sample else '\t' if '\t' in sample else ';'
-            
-#             csv_reader = csv.DictReader(stream, delimiter=delimiter)
-#             rows = list(csv_reader)
+#             if data is None:
+#                 return jsonify({"error": "Could not decode CSV file"}), 400
 
-#         # Handle Excel files
+#             # Detect delimiter
+#             delimiter = ',' if ',' in data[:1000] else '\t' if '\t' in data[:1000] else ';'
+#             stream = StringIO(data)
+#             reader = csv.DictReader(stream, delimiter=delimiter)
+#             rows = list(reader)
+#             os.remove(filepath)
+
 #         elif filename.endswith(('.xlsx', '.xls')):
+#             import pandas as pd
 #             df = pd.read_excel(file)
 #             rows = df.replace({pd.NA: None, float('nan'): None}).to_dict('records')
-        
 #         else:
-#             return jsonify({"error": "Unsupported file format."}), 400
+#             return jsonify({"error": "Unsupported file format. Use CSV or Excel."}), 400
 
 #         if not rows:
 #             return jsonify({"error": "No data found in file"}), 400
 
-#         # Auto-detect column mapping
-#         first_row = rows[0]
-#         available_columns = list(first_row.keys())
-        
-#         print(f"Available columns: {available_columns}")
-#         print(f"First row: {first_row}")
+#         # ---------- Detect column names ----------
+#         name_col = find_column(['name', 'full', 'student', 'names'], rows[0].keys()[0] if rows else None)
+#         phone_col = find_column(['phone', 'mobile', 'contact', 'phoneno'], None)
+#         cert_col = find_column(['certificate', 'cert', 'code', 'number', 'certificate code'], None)
 
-#         # Auto-detect name column
-#         name_column = None
-#         for col in available_columns:
-#             col_lower = col.lower().strip()
-#             if any(keyword in col_lower for keyword in ['name', 'student', 'full']):
-#                 name_column = col
-#                 break
-#         if not name_column and available_columns:
-#             name_column = available_columns[0]
+#         detected_columns = {
+#             "name_column": name_col,
+#             "phone_column": phone_col,
+#             "certificate_column": cert_col,
+#             "used_default_course": default_course,
+#             "used_default_year": default_year
+#         }
 
-#         # Auto-detect course column
-#         course_column = None
-#         for col in available_columns:
-#             col_lower = col.lower().strip()
-#             if any(keyword in col_lower for keyword in ['department', 'course', 'program', 'dept']):
-#                 course_column = col
-#                 break
-#         if not course_column and len(available_columns) > 1:
-#             course_column = available_columns[1]
+#         if not name_col:
+#             return jsonify({"error": "No name column found", "detected_columns": detected_columns}), 400
+#         if not cert_col:
+#             return jsonify({"error": "No certificate code column found", "detected_columns": detected_columns}), 400
 
-#         # Auto-detect certificate column
-#         cert_column = None
-#         for col in available_columns:
-#             col_lower = col.lower().strip()
-#             if any(keyword in col_lower for keyword in ['certificate', 'cert', 'number', 'no', 'code']):
-#                 cert_column = col
-#                 break
-#         if not cert_column and len(available_columns) > 2:
-#             cert_column = available_columns[2]
-
-#         print(f"Detected columns - Name: {name_column}, Course: {course_column}, Cert: {cert_column}")
-
-#         # Process rows
-#         for index, row in enumerate(rows, 1):
+#         # ---------- Process each row ----------
+#         for idx, row in enumerate(rows, start=1):
 #             try:
-#                 full_name = str(row.get(name_column, '')).strip() if name_column else ''
-#                 course_name = str(row.get(course_column, '')).strip() if course_column else ''
-#                 cert_num = str(row.get(cert_column, '')).strip() if cert_column else ''
-
+#                 full_name = str(row.get(name_col, '')).strip()
 #                 if not full_name:
-#                     errors.append(f"Row {index}: No name found in column '{name_column}'")
-#                     continue
-#                 if not course_name:
-#                     errors.append(f"Row {index}: No course found in column '{course_column}'")
+#                     errors.append(f"Row {idx}: empty name")
 #                     continue
 
-#                 # Parse name
-#                 name_parts = full_name.split()
-#                 first_name = name_parts[0] if name_parts else "Unknown"
-#                 last_name = ' '.join(name_parts[1:]) if len(name_parts) > 1 else "Student"
-
-#                 # Generate certificate number if not provided
+#                 cert_num = str(row.get(cert_col, '')).strip()
 #                 if not cert_num:
-#                     cert_num = generate_certificate_number(course_name)
+#                     # Generate a new certificate number if not provided
+#                     cert_num = generate_certificate_number(default_course, datetime.now().date())
 #                 else:
-#                     # FIX: Check if certificate with this number already exists
-#                     existing_cert = Certificate.query.filter_by(verification_code=cert_num).first()
-#                     if existing_cert:
-#                         errors.append(f"Row {index}: Certificate number '{cert_num}' already exists for student '{existing_cert.student_first_name} {existing_cert.student_last_name}'. Skipping.")
+#                     # Check for duplicate
+#                     existing = Certificate.query.filter_by(verification_code=cert_num).first()
+#                     if existing:
+#                         errors.append(f"Row {idx}: Certificate number '{cert_num}' already exists for {existing.student_full_name}")
 #                         continue
 
-#                 # Generate QR
-#                 qr_path = generate_certificate_qr(
-#                     full_name,
-#                     course_name,
-#                     cert_num,
-#                     datetime.now().date()
-#                 )
+#                 # Split full name into first/last
+#                 parts = full_name.split(maxsplit=1)
+#                 first_name = parts[0]
+#                 last_name = parts[1] if len(parts) > 1 else ""
+
+#                 # Phone (optional)
+#                 phone = str(row.get(phone_col, '')).strip() if phone_col else None
+#                 if phone in ('', 'None'): phone = None
 
 #                 # Find or create student
-#                 student = Student.query.filter_by(
-#                     first_name=first_name,
-#                     last_name=last_name,
-#                     course_name=course_name
+#                 student = Student.query.filter(
+#                     (Student.full_name == full_name) |
+#                     (Student.first_name == first_name and Student.last_name == last_name)
 #                 ).first()
 
 #                 if not student:
-#                     # Create a unique email
+#                     # Generate unique email
 #                     base_email = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}@speedlinkng.com"
 #                     email = base_email
 #                     counter = 1
-                    
-#                     # Ensure unique email
 #                     while Student.query.filter_by(email=email).first():
-#                         email = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}{counter}@speedlinkng.com"
+#                         email = f"{base_email.split('@')[0]}{counter}@speedlinkng.com"
 #                         counter += 1
-                    
+
 #                     student = Student(
 #                         first_name=first_name,
 #                         last_name=last_name,
+#                         full_name=full_name,
 #                         email=email,
-#                         course_name=course_name,
-#                         year_of_study="2025"
+#                         phone_number=phone,
+#                         course_name=default_course,
+#                         year_of_study=default_year
 #                     )
 #                     db.session.add(student)
-#                     db.session.flush()
+#                     db.session.flush()  # get student.id
 
-#                 # FIX: Double-check certificate doesn't exist (in case of race condition)
-#                 existing_cert_final = Certificate.query.filter_by(verification_code=cert_num).first()
-#                 if existing_cert_final:
-#                     errors.append(f"Row {index}: Certificate number '{cert_num}' already exists. Skipping.")
-#                     continue
+#                     # Generate student_id (if you have that function)
+#                     try:
+#                         from ..utils.student_id_generator import generate_student_id
+#                         student.student_id = generate_student_id(default_year, default_course)
+#                     except ImportError:
+#                         # Fallback: generate a simple ID
+#                         student.student_id = f"STU/{default_year}/{student.id:04d}"
 
-#                 # Create certificate
+#                 # Create certificate (no QR code)
 #                 cert = Certificate(
 #                     student_id=student.id,
 #                     student_first_name=first_name,
 #                     student_last_name=last_name,
-#                     course_name=course_name,
-#                     course_summary=f"Certificate for {course_name}",
-#                     year_of_study="2025",
+#                     student_full_name=full_name,
+#                     course_name=default_course,
+#                     course_summary=f"Certificate for {default_course}",
+#                     year_of_study=default_year,
 #                     verification_code=cert_num,
-#                     qr_code_url=qr_path,
+#                     qr_code_url=None,          # Not generating QR anymore
 #                     issued_at=datetime.now().date()
 #                 )
-
 #                 db.session.add(cert)
 #                 created_count += 1
 
 #             except Exception as e:
-#                 errors.append(f"Row {index}: {str(e)}")
+#                 errors.append(f"Row {idx}: {str(e)}")
 #                 continue
 
 #         db.session.commit()
-
 #         return jsonify({
-#             "message": "File processed successfully",
-#             "imported": created_count,
+#             "message": f"Imported {created_count} certificates",
 #             "errors": errors,
-#             "total_rows": len(rows),
-#             "detected_columns": {
-#                 "name_column": name_column,
-#                 "course_column": course_column, 
-#                 "cert_column": cert_column
-#             }
+#             "detected_columns": detected_columns
 #         })
 
 #     except Exception as e:
 #         db.session.rollback()
-#         return jsonify({"error": f"Failed to process file: {str(e)}"}), 500
+#         return jsonify({"error": f"Processing failed: {str(e)}"}), 500
 
-
-# Add this to your certificate_controller.py file
 
 # ===================================
 # DOWNLOAD SAMPLE CERTIFICATE FILE

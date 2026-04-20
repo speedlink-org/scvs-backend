@@ -6,8 +6,29 @@ from ..models.certificate import Certificate
 from ..extensions import db
 import csv
 import os
+import re
 from ..utils.student_id_generator import generate_student_id
 from ..utils.certificate_number import generate_certificate_number
+
+
+def parse_flexible_date(date_str, year_str):
+    """
+    Parse a date string like "Monday 2nd, March" and combine with a year (e.g., "2026").
+    Returns a date object or None if parsing fails.
+    """
+    if not date_str or not year_str:
+        return None
+    # Remove ordinal suffixes (st, nd, rd, th)
+    cleaned = re.sub(r'(\d)(st|nd|rd|th)', r'\1', date_str)
+    # Try to parse with day, month, year
+    for fmt in ['%A %d, %B', '%A %d %B', '%d %B', '%B %d']:
+        try:
+            dt = datetime.strptime(cleaned, fmt)
+            # Replace year with the provided year
+            return dt.replace(year=int(year_str)).date()
+        except ValueError:
+            continue
+    return None
 
 # -------------------------
 # LIST STUDENTS (Paginated)
@@ -30,80 +51,13 @@ def list_students():
             "status": "Certified" if s.certificates else "Not Certified",
             "created_at": s.created_at.strftime("%Y-%m-%d %H:%M:%S") if s.created_at else None,
             "certificate_count": len(s.certificates),
-            "verification_code": s.certificates[0].verification_code if s.certificates else None
+            # "verification_code": s.certificates[0].verification_code if s.certificates else None
         })
     
     return jsonify({
         "students": result,
         "count": len(result)
     })
-
-# def list_students():
-#     # Remove pagination parameters
-#     query = Student.query.order_by(Student.created_at.desc())
-    
-#     # Get all students
-#     all_students = query.all()
-
-#     students = []
-#     for s in all_students:
-#         # Get student_id from first certificate if exists
-#         student_id = None
-#         if s.certificates:
-#             # Take the verification code from the first certificate
-#             verification_code = s.certificates[0].verification_code
-#             # Remove "SHSL/" prefix if present
-#             if verification_code.startswith("SHSL/"):
-#                 student_id = verification_code[5:]  # "25B/DM/0027"
-#             else:
-#                 student_id = verification_code
-        
-#         students.append({
-#             "id": s.id,
-#             "student_id": student_id,  # Add the extracted student_id
-#             "first_name": s.first_name,
-#             "last_name": s.last_name,
-#             "email": s.email,
-#             "phone_number": s.phone_number,
-#             "course_name": s.course_name,
-#             "year_of_study": s.year_of_study,
-#             "status": "Certified" if s.certificates else "Not Certified",
-#             "created_at": s.created_at.strftime("%Y-%m-%d %H:%M:%S") if s.created_at else None,
-#             "certificate_count": len(s.certificates) if s.certificates else 0,
-#             "verification_code": s.certificates[0].verification_code if s.certificates else None  # Optional: include full code
-#         })
-
-#     return jsonify({
-#         "students": students,
-#         "count": len(students)
-#     })
-
-# def list_students():
-#     # Remove pagination parameters
-#     query = Student.query.order_by(Student.created_at.desc())
-    
-#     # Get all students
-#     all_students = query.all()
-
-#     students = []
-#     for s in all_students:
-#         students.append({
-#             "id": s.id,
-#             "first_name": s.first_name,
-#             "last_name": s.last_name,
-#             "email": s.email,
-#             "phone_number": s.phone_number,
-#             "course_name": s.course_name,
-#             "year_of_study": s.year_of_study,
-#             "status": "Certified" if s.certificates else "Not Certified",
-#             "created_at": s.created_at.strftime("%Y-%m-%d %H:%M:%S") if s.created_at else None,
-#             "certificate_count": len(s.certificates) if s.certificates else 0
-#         })
-
-#     return jsonify({
-#         "students": students,
-#         "count": len(students)
-#     })
 
 
 # -------------------------
@@ -193,98 +147,7 @@ def create_student():
     except Exception as e:
         db.session.rollback()
         return {"error": f"Failed to create student: {str(e)}"}, 500
-    
-# def create_student():
-#     try:
-#         data = request.json
-        
-#         # Check if student with email already exists
-#         existing_student = Student.query.filter_by(email=data.get("email")).first()
-#         if existing_student:
-#             return {
-#                 "error": "Student with this email already exists",
-#                 "student_id": existing_student.id,
-#                 "existing_student": {
-#                     "first_name": existing_student.first_name,
-#                     "last_name": existing_student.last_name,
-#                     "email": existing_student.email
-#                 }
-#             }, 400
-
-#         # Validate required fields
-#         required_fields = ["first_name", "last_name", "email", "course_name"]
-#         missing_fields = [field for field in required_fields if not data.get(field)]
-#         if missing_fields:
-#             return {
-#                 "error": f"Missing required fields: {', '.join(missing_fields)}"
-#             }, 400
-
-#         # Parse dates if provided
-#         program_start_date = None
-#         program_end_date = None
-        
-#         if data.get("program_start_date"):
-#             try:
-#                 program_start_date = datetime.strptime(data.get("program_start_date"), '%Y-%m-%d').date()
-#             except ValueError:
-#                 return {"error": "Invalid program_start_date format. Use YYYY-MM-DD"}, 400
-        
-#         if data.get("program_end_date"):
-#             try:
-#                 program_end_date = datetime.strptime(data.get("program_end_date"), '%Y-%m-%d').date()
-#             except ValueError:
-#                 return {"error": "Invalid program_end_date format. Use YYYY-MM-DD"}, 400
-
-#         student = Student(
-#             first_name=data.get("first_name"),
-#             last_name=data.get("last_name"),
-#             email=data.get("email"),
-#             phone_number=data.get("phone_number"),
-#             course_name=data.get("course_name"),
-#             year_of_study=data.get("year_of_study"),
-#             program_start_date=program_start_date,
-#             program_end_date=program_end_date,
-#         )
-        
-#         db.session.add(student)
-#         db.session.commit()
-
-#         return {
-#             "message": "Student created successfully", 
-#             "student_id": student.id,
-#             "student": {
-#                 "first_name": student.first_name,
-#                 "last_name": student.last_name,
-#                 "email": student.email,
-#                 "course_name": student.course_name
-#             }
-#         }, 201
-
-#     except Exception as e:
-#         db.session.rollback()
-#         return {
-#             "error": f"Failed to create student: {str(e)}"
-#         }, 500
-    
-# def create_student():
-#     data = request.json
-#     student = Student(
-#         first_name=data.get("first_name"),
-#         last_name=data.get("last_name"),
-#         email=data.get("email"),
-#         phone_number=data.get("phone_number"),
-#         course_name=data.get("course_name"),
-#         year_of_study=data.get("year_of_study"),
-#         program_start_date=data.get("program_start_date"),
-#         program_end_date=data.get("program_end_date"),
-#         # photo_url=data.get("photo_url")
-#     )
-#     db.session.add(student)
-#     db.session.commit()
-
-#     return {"message": "Student created successfully", "student_id": student.id}
-
-
+   
 # -------------------------
 # UPDATE STUDENT
 # -------------------------
@@ -326,27 +189,6 @@ def update_student(student_id):
     db.session.commit()
     return {"message": "Student updated successfully", "student_id": student.student_id}
 
-
-# def update_student(student_id):
-#     student = Student.query.get(student_id)
-#     if not student:
-#         return {"message": "Student not found"}, 404
-
-#     data = request.json
-#     student.first_name = data.get("first_name", student.first_name)
-#     student.last_name = data.get("last_name", student.last_name)
-#     student.email = data.get("email", student.email)
-#     student.phone_number = data.get("phone_number", student.phone_number)
-#     student.course_name = data.get("course_name", student.course_name)
-#     student.year_of_study = data.get("year_of_study", student.year_of_study)
-#     student.program_start_date = data.get("program_start_date", student.program_start_date)
-#     student.program_end_date = data.get("program_end_date", student.program_end_date)
-#     student.photo_url = data.get("photo_url", student.photo_url)
-
-#     db.session.commit()
-#     return {"message": "Student updated successfully"}
-
-
 # -------------------------
 # DELETE STUDENT
 # -------------------------
@@ -369,23 +211,21 @@ def import_students_csv():
         return {"message": "No file provided"}, 400
 
     default_course = request.form.get("default_course", "").strip()
-    if not default_course:
-        return {"message": "Please provide a 'default_course' parameter"}, 400
-
     default_year = request.form.get("default_year", "2026").strip()
 
     filename = file.filename.lower()
     created_count = 0
     errors = []
+    rows = []          # <-- define rows here
     detected_columns = {}
 
     try:
-        # --- Read file (same as before, CSV or Excel) ---
+        # ---------- Read file (CSV or Excel) ----------
         if filename.endswith('.csv'):
             filepath = os.path.join("tmp", file.filename)
             os.makedirs("tmp", exist_ok=True)
             file.save(filepath)
-            # encoding detection
+
             encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
             data = None
             for enc in encodings:
@@ -397,12 +237,14 @@ def import_students_csv():
                     continue
             if data is None:
                 return {"message": "Could not decode CSV file"}, 400
+
             delimiter = ',' if ',' in data[:1000] else '\t' if '\t' in data[:1000] else ';'
             from io import StringIO
             stream = StringIO(data)
             reader = csv.DictReader(stream, delimiter=delimiter)
             rows = list(reader)
             os.remove(filepath)
+
         elif filename.endswith(('.xlsx', '.xls')):
             import pandas as pd
             df = pd.read_excel(file)
@@ -413,7 +255,7 @@ def import_students_csv():
         if not rows:
             return {"message": "No data found"}, 400
 
-        # --- Column detection (only for name, phone, email) ---
+        # ---------- Column detection ----------
         available = list(rows[0].keys())
         def find_column(patterns, default=None):
             for col in available:
@@ -426,11 +268,19 @@ def import_students_csv():
         name_col = find_column(['name', 'full', 'student', 'names'], available[0])
         phone_col = find_column(['phone', 'mobile', 'contact', 'phoneno'], None)
         email_col = find_column(['email', 'e-mail', 'mail'], None)
+        programme_col = find_column(['programme', 'program', 'course'], None)
+        start_date_col = find_column(['start', 'start date', 'begin'], None)
+        end_date_col = find_column(['end', 'end date', 'finish'], None)
+        year_col = find_column(['year'], None)
 
         detected_columns = {
             "name_column": name_col,
             "phone_column": phone_col,
             "email_column": email_col,
+            "programme_column": programme_col,
+            "start_date_column": start_date_col,
+            "end_date_column": end_date_col,
+            "year_column": year_col,
             "used_default_course": default_course,
             "used_default_year": default_year
         }
@@ -438,7 +288,7 @@ def import_students_csv():
         if not name_col:
             return {"message": "No name column found", "detected_columns": detected_columns}, 400
 
-        # --- Process rows ---
+        # ---------- Process rows ----------
         for idx, row in enumerate(rows, start=1):
             try:
                 full_name = str(row.get(name_col, '')).strip()
@@ -466,43 +316,68 @@ def import_students_csv():
                         email = f"{base.split('@')[0]}{counter}@speedlinkng.com"
                         counter += 1
 
-                # Create student (without student_id)
+                # Course name
+                course_name = default_course
+                if programme_col:
+                    file_course = str(row.get(programme_col, '')).strip()
+                    if file_course:
+                        course_name = file_course
+
+                # Year of study
+                year_of_study = default_year
+                if year_col:
+                    file_year = str(row.get(year_col, '')).strip()
+                    if file_year:
+                        year_of_study = file_year
+
+                # Start and End dates
+                start_date = None
+                end_date = None
+                if start_date_col and year_col:
+                    start_str = str(row.get(start_date_col, '')).strip()
+                    year_str = str(row.get(year_col, '')).strip()
+                    if start_str and year_str:
+                        start_date = parse_flexible_date(start_str, year_str)
+                if end_date_col and year_col:
+                    end_str = str(row.get(end_date_col, '')).strip()
+                    year_str = str(row.get(year_col, '')).strip()
+                    if end_str and year_str:
+                        end_date = parse_flexible_date(end_str, year_str)
+
+                # Create student
                 student = Student(
                     first_name=first_name,
                     last_name=last_name,
                     full_name=full_name,
                     email=email,
                     phone_number=phone,
-                    course_name=default_course,   # always use default
-                    year_of_study=default_year
+                    course_name=course_name,
+                    year_of_study=year_of_study,
+                    program_start_date=start_date,
+                    program_end_date=end_date
                 )
                 db.session.add(student)
-                db.session.flush()   # get student.id
+                db.session.flush()
 
-                # Generate student_id (with error fallback)
+                # Generate student_id
                 try:
                     from ..utils.student_id_generator import generate_student_id
-                    student.student_id = generate_student_id(
-                        year_of_study=default_year,
-                        course_name=default_course
-                    )
+                    student.student_id = generate_student_id(year_of_study, course_name)
                 except Exception as e:
                     errors.append(f"Row {idx}: student_id generation failed - {str(e)}")
-                    student.student_id = f"TEMP_{student.id}"   # fallback
+                    student.student_id = f"TEMP_{student.id}"
 
-                # Create a certificate for this student
-                cert_num = generate_certificate_number(default_course, datetime.now().date())
-                # qr_url = generate_certificate_qr(full_name, default_course, cert_num, datetime.now().date())
+                # Create certificate
+                cert_num = generate_certificate_number(course_name, datetime.now().date())
                 cert = Certificate(
                     student_id=student.id,
                     student_first_name=first_name,
                     student_last_name=last_name,
                     student_full_name=full_name,
-                    course_name=default_course,
-                    course_summary=f"Certificate for {default_course}",
-                    year_of_study=default_year,
+                    course_name=course_name,
+                    course_summary=f"Certificate for {course_name}",
+                    year_of_study=year_of_study,
                     verification_code=cert_num,
-                    # qr_code_url=qr_url,
                     issued_at=datetime.now().date()
                 )
                 db.session.add(cert)
@@ -523,43 +398,169 @@ def import_students_csv():
         db.session.rollback()
         return {"message": f"Processing failed: {str(e)}"}, 500
 
-        
+
 
 # def import_students_csv():
 #     file = request.files.get("file")
 #     if not file:
-#         return {"message": "No CSV file provided"}, 400
+#         return {"message": "No file provided"}, 400
 
-#     # Save uploaded CSV temporarily
-#     filepath = os.path.join("tmp", file.filename)
-#     os.makedirs("tmp", exist_ok=True)
-#     file.save(filepath)
+#     default_course = request.form.get("default_course", "").strip()
+#     if not default_course:
+#         return {"message": "Please provide a 'default_course' parameter"}, 400
 
+#     default_year = request.form.get("default_year", "2026").strip()
+
+#     filename = file.filename.lower()
 #     created_count = 0
-#     with open(filepath, "r", encoding="utf-8") as f:
-#         reader = csv.DictReader(f)
-#         for row in reader:
-#             student = Student(
-#                 first_name=row.get("first_name"),
-#                 last_name=row.get("last_name"),
-#                 email=row.get("email"),
-#                 phone_number=row.get("phone_number"),
-#                 course_name=row.get("course_name"),
-#                 year_of_study=row.get("year_of_study"),
-#                 program_start_date=row.get("program_start_date"),
-#                 program_end_date=row.get("program_end_date"),
-#                 photo_url=row.get("photo_url")
-#             )
-#             db.session.add(student)
-#             created_count += 1
+#     errors = []
+#     detected_columns = {}
+
+#     try:
+#         # --- Read file (same as before, CSV or Excel) ---
+#         if filename.endswith('.csv'):
+#             filepath = os.path.join("tmp", file.filename)
+#             os.makedirs("tmp", exist_ok=True)
+#             file.save(filepath)
+#             # encoding detection
+#             encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
+#             data = None
+#             for enc in encodings:
+#                 try:
+#                     with open(filepath, 'r', encoding=enc) as f:
+#                         data = f.read()
+#                     break
+#                 except UnicodeDecodeError:
+#                     continue
+#             if data is None:
+#                 return {"message": "Could not decode CSV file"}, 400
+#             delimiter = ',' if ',' in data[:1000] else '\t' if '\t' in data[:1000] else ';'
+#             from io import StringIO
+#             stream = StringIO(data)
+#             reader = csv.DictReader(stream, delimiter=delimiter)
+#             rows = list(reader)
+#             os.remove(filepath)
+#         elif filename.endswith(('.xlsx', '.xls')):
+#             import pandas as pd
+#             df = pd.read_excel(file)
+#             rows = df.replace({pd.NA: None, float('nan'): None}).to_dict('records')
+#         else:
+#             return {"message": "Unsupported file format"}, 400
+
+#         if not rows:
+#             return {"message": "No data found"}, 400
+
+#         # --- Column detection (only for name, phone, email) ---
+#         available = list(rows[0].keys())
+#         def find_column(patterns, default=None):
+#             for col in available:
+#                 col_lower = col.lower().strip()
+#                 for pat in patterns:
+#                     if pat in col_lower:
+#                         return col
+#             return default
+
+#         name_col = find_column(['name', 'full', 'student', 'names'], available[0])
+#         phone_col = find_column(['phone', 'mobile', 'contact', 'phoneno'], None)
+#         email_col = find_column(['email', 'e-mail', 'mail'], None)
+
+#         detected_columns = {
+#             "name_column": name_col,
+#             "phone_column": phone_col,
+#             "email_column": email_col,
+#             "used_default_course": default_course,
+#             "used_default_year": default_year
+#         }
+
+#         if not name_col:
+#             return {"message": "No name column found", "detected_columns": detected_columns}, 400
+
+#         # --- Process rows ---
+#         for idx, row in enumerate(rows, start=1):
+#             try:
+#                 full_name = str(row.get(name_col, '')).strip()
+#                 if not full_name:
+#                     errors.append(f"Row {idx}: empty name")
+#                     continue
+
+#                 # Split name
+#                 parts = full_name.split(maxsplit=1)
+#                 first_name = parts[0]
+#                 last_name = parts[1] if len(parts) > 1 else ""
+
+#                 # Phone
+#                 phone = str(row.get(phone_col, '')).strip() if phone_col else None
+#                 if phone in ('', 'None'): phone = None
+
+#                 # Email
+#                 if email_col:
+#                     email = str(row.get(email_col, '')).strip()
+#                 else:
+#                     base = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}@speedlinkng.com"
+#                     email = base
+#                     counter = 1
+#                     while Student.query.filter_by(email=email).first():
+#                         email = f"{base.split('@')[0]}{counter}@speedlinkng.com"
+#                         counter += 1
+
+#                 # Create student (without student_id)
+#                 student = Student(
+#                     first_name=first_name,
+#                     last_name=last_name,
+#                     full_name=full_name,
+#                     email=email,
+#                     phone_number=phone,
+#                     course_name=default_course,   # always use default
+#                     year_of_study=default_year
+#                 )
+#                 db.session.add(student)
+#                 db.session.flush()   # get student.id
+
+#                 # Generate student_id (with error fallback)
+#                 try:
+#                     from ..utils.student_id_generator import generate_student_id
+#                     student.student_id = generate_student_id(
+#                         year_of_study=default_year,
+#                         course_name=default_course
+#                     )
+#                 except Exception as e:
+#                     errors.append(f"Row {idx}: student_id generation failed - {str(e)}")
+#                     student.student_id = f"TEMP_{student.id}"   # fallback
+
+#                 # Create a certificate for this student
+#                 cert_num = generate_certificate_number(default_course, datetime.now().date())
+#                 # qr_url = generate_certificate_qr(full_name, default_course, cert_num, datetime.now().date())
+#                 cert = Certificate(
+#                     student_id=student.id,
+#                     student_first_name=first_name,
+#                     student_last_name=last_name,
+#                     student_full_name=full_name,
+#                     course_name=default_course,
+#                     course_summary=f"Certificate for {default_course}",
+#                     year_of_study=default_year,
+#                     verification_code=cert_num,
+#                     # qr_code_url=qr_url,
+#                     issued_at=datetime.now().date()
+#                 )
+#                 db.session.add(cert)
+#                 created_count += 1
+
+#             except Exception as e:
+#                 errors.append(f"Row {idx}: {str(e)}")
+#                 continue
+
 #         db.session.commit()
+#         return {
+#             "message": f"Imported {created_count} students with certificates",
+#             "errors": errors,
+#             "detected_columns": detected_columns
+#         }
 
-#     os.remove(filepath)
-#     return {"message": f"{created_count} students imported successfully"}
+#     except Exception as e:
+#         db.session.rollback()
+#         return {"message": f"Processing failed: {str(e)}"}, 500
 
-
-
-# Add this to your student_controller.py file
+       
 
 # -------------------------
 # DOWNLOAD SAMPLE STUDENT FILE
