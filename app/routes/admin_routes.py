@@ -25,6 +25,7 @@ def get_certificate_settings_route():
 # -------------------------
 # UPDATE CERTIFICATE SETTINGS (PATCH)
 # -------------------------
+@admin_bp.patch("/certificate-settings")
 @admin_bp.patch("/certificate-settings/<course_name>")
 @swag_from({
     "tags": ["Admin Management"],
@@ -92,7 +93,7 @@ def get_certificate_settings_route():
         "400": {"description": "Invalid input"}
     }
 })
-def update_certificate_settings_route(course_name):
+def update_certificate_settings_route(course_name=None):
     return update_certificate_settings(course_name)
 
 @admin_bp.get('/certificate-settings/courses')
@@ -118,26 +119,25 @@ def get_certificate_courses():
 
 
 # image display routes (logo / signatures)
-
 @admin_bp.get("/certificate-settings/logo")
 @swag_from({
     "tags": ["Admin Management"],
-    "summary": "Get certificate logo image",
-    "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+    "summary": "Get certificate logo image for a specific course",
+    "description": "Returns the uploaded logo image (binary) for the given course. Requires 'course_name' query parameter.",
+    "parameters": [
+        {"in": "query", "name": "course_name", "type": "string", "required": True, "description": "Course name (case‑insensitive)"}
+    ],
     "responses": {
-        "200": {
-            "description": "Logo image",
-            "content": {
-                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
-                "image/png": {"schema": {"type": "string", "format": "binary"}},
-                "image/gif": {"schema": {"type": "string", "format": "binary"}}
-            }
-        },
+        "200": {"description": "Logo image"},
+        "400": {"description": "Missing course_name"},
         "404": {"description": "Logo not found"}
     }
 })
 def get_logo():
-    settings = CertificateSetting.get_instance()
+    course_name = request.args.get('course_name')
+    if not course_name:
+        return jsonify({"error": "course_name query parameter is required"}), 400
+    settings = CertificateSetting.get_or_create_for_course(course_name)
     if settings.logo_data:
         return Response(settings.logo_data, mimetype=settings.logo_mime)
     return "", 404
@@ -146,45 +146,44 @@ def get_logo():
 @admin_bp.get("/certificate-settings/logo2")
 @swag_from({
     "tags": ["Admin Management"],
-    "summary": "Get second certificate logo image",
-    "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+    "summary": "Get second certificate logo image for a specific course",
+    "parameters": [
+        {"in": "query", "name": "course_name", "type": "string", "required": True}
+    ],
     "responses": {
-        "200": {
-            "description": "2nd Logo image",
-            "content": {
-                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
-                "image/png": {"schema": {"type": "string", "format": "binary"}},
-                "image/gif": {"schema": {"type": "string", "format": "binary"}}
-            }
-        },
+        "200": {"description": "2nd Logo image"},
+        "400": {"description": "Missing course_name"},
         "404": {"description": "Logo not found"}
     }
 })
 def get_logo2():
-    settings = CertificateSetting.get_instance()
+    course_name = request.args.get('course_name')
+    if not course_name:
+        return jsonify({"error": "course_name query parameter is required"}), 400
+    settings = CertificateSetting.get_or_create_for_course(course_name)
     if settings.logo2_data:
         return Response(settings.logo2_data, mimetype=settings.logo2_mime)
     return "", 404
 
+
 @admin_bp.get("/certificate-settings/logo3")
 @swag_from({
     "tags": ["Admin Management"],
-    "summary": "Get third certificate logo image",
-    "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+    "summary": "Get third certificate logo image for a specific course",
+    "parameters": [
+        {"in": "query", "name": "course_name", "type": "string", "required": True}
+    ],
     "responses": {
-        "200": {
-            "description": "3rd Logo image",
-            "content": {
-                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
-                "image/png": {"schema": {"type": "string", "format": "binary"}},
-                "image/gif": {"schema": {"type": "string", "format": "binary"}}
-            }
-        },
+        "200": {"description": "3rd Logo image"},
+        "400": {"description": "Missing course_name"},
         "404": {"description": "Logo not found"}
     }
 })
 def get_logo3():
-    settings = CertificateSetting.get_instance()
+    course_name = request.args.get('course_name')
+    if not course_name:
+        return jsonify({"error": "course_name query parameter is required"}), 400
+    settings = CertificateSetting.get_or_create_for_course(course_name)
     if settings.logo3_data:
         return Response(settings.logo3_data, mimetype=settings.logo3_mime)
     return "", 404
@@ -193,48 +192,165 @@ def get_logo3():
 @admin_bp.get("/certificate-settings/signature")
 @swag_from({
     "tags": ["Admin Management"],
-    "summary": "Get first signature image",
-    "description": "Returns the uploaded first signature image (binary). Returns 404 if not uploaded.",
+    "summary": "Get first signature image for a specific course",
+    "parameters": [
+        {"in": "query", "name": "course_name", "type": "string", "required": True}
+    ],
     "responses": {
-        "200": {
-            "description": "Signature image",
-            "content": {
-                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
-                "image/png": {"schema": {"type": "string", "format": "binary"}},
-                "image/gif": {"schema": {"type": "string", "format": "binary"}}
-            }
-        },
+        "200": {"description": "Signature image"},
+        "400": {"description": "Missing course_name"},
         "404": {"description": "Signature not found"}
     }
 })
 def get_signature():
-    settings = CertificateSetting.get_instance()
+    course_name = request.args.get('course_name')
+    if not course_name:
+        return jsonify({"error": "course_name query parameter is required"}), 400
+    settings = CertificateSetting.get_or_create_for_course(course_name)
     if settings.signature_data:
         return Response(settings.signature_data, mimetype=settings.signature_mime)
     return "", 404
 
+
 @admin_bp.get("/certificate-settings/signature2")
 @swag_from({
     "tags": ["Admin Management"],
-    "summary": "Get second signature image",
-    "description": "Returns the uploaded second signature image (binary). Returns 404 if not uploaded.",
+    "summary": "Get second signature image for a specific course",
+    "parameters": [
+        {"in": "query", "name": "course_name", "type": "string", "required": True}
+    ],
     "responses": {
-        "200": {
-            "description": "Second signature image",
-            "content": {
-                "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
-                "image/png": {"schema": {"type": "string", "format": "binary"}},
-                "image/gif": {"schema": {"type": "string", "format": "binary"}}
-            }
-        },
+        "200": {"description": "Second signature image"},
+        "400": {"description": "Missing course_name"},
         "404": {"description": "Signature not found"}
     }
 })
 def get_signature2():
-    settings = CertificateSetting.get_instance()
+    course_name = request.args.get('course_name')
+    if not course_name:
+        return jsonify({"error": "course_name query parameter is required"}), 400
+    settings = CertificateSetting.get_or_create_for_course(course_name)
     if settings.signature2_data:
         return Response(settings.signature2_data, mimetype=settings.signature2_mime)
     return "", 404
+
+    
+# @admin_bp.get("/certificate-settings/logo")
+# @swag_from({
+#     "tags": ["Admin Management"],
+#     "summary": "Get certificate logo image",
+#     "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+#     "responses": {
+#         "200": {
+#             "description": "Logo image",
+#             "content": {
+#                 "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/png": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/gif": {"schema": {"type": "string", "format": "binary"}}
+#             }
+#         },
+#         "404": {"description": "Logo not found"}
+#     }
+# })
+# def get_logo():
+#     settings = CertificateSetting.get_or_create_for_course()
+#     if settings.logo_data:
+#         return Response(settings.logo_data, mimetype=settings.logo_mime)
+#     return "", 404
+
+
+# @admin_bp.get("/certificate-settings/logo2")
+# @swag_from({
+#     "tags": ["Admin Management"],
+#     "summary": "Get second certificate logo image",
+#     "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+#     "responses": {
+#         "200": {
+#             "description": "2nd Logo image",
+#             "content": {
+#                 "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/png": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/gif": {"schema": {"type": "string", "format": "binary"}}
+#             }
+#         },
+#         "404": {"description": "Logo not found"}
+#     }
+# })
+# def get_logo2():
+#     settings = CertificateSetting.get_or_create_for_course()
+#     if settings.logo2_data:
+#         return Response(settings.logo2_data, mimetype=settings.logo2_mime)
+#     return "", 404
+
+# @admin_bp.get("/certificate-settings/logo3")
+# @swag_from({
+#     "tags": ["Admin Management"],
+#     "summary": "Get third certificate logo image",
+#     "description": "Returns the uploaded logo image (binary). Returns 404 if no logo has been uploaded.",
+#     "responses": {
+#         "200": {
+#             "description": "3rd Logo image",
+#             "content": {
+#                 "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/png": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/gif": {"schema": {"type": "string", "format": "binary"}}
+#             }
+#         },
+#         "404": {"description": "Logo not found"}
+#     }
+# })
+# def get_logo3():
+#     settings = CertificateSetting.get_or_create_for_course()
+#     if settings.logo3_data:
+#         return Response(settings.logo3_data, mimetype=settings.logo3_mime)
+#     return "", 404
+
+
+# @admin_bp.get("/certificate-settings/signature")
+# @swag_from({
+#     "tags": ["Admin Management"],
+#     "summary": "Get first signature image",
+#     "description": "Returns the uploaded first signature image (binary). Returns 404 if not uploaded.",
+#     "responses": {
+#         "200": {
+#             "description": "Signature image",
+#             "content": {
+#                 "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/png": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/gif": {"schema": {"type": "string", "format": "binary"}}
+#             }
+#         },
+#         "404": {"description": "Signature not found"}
+#     }
+# })
+# def get_signature():
+#     settings = CertificateSetting.get_or_create_for_course()
+#     if settings.signature_data:
+#         return Response(settings.signature_data, mimetype=settings.signature_mime)
+#     return "", 404
+
+# @admin_bp.get("/certificate-settings/signature2")
+# @swag_from({
+#     "tags": ["Admin Management"],
+#     "summary": "Get second signature image",
+#     "description": "Returns the uploaded second signature image (binary). Returns 404 if not uploaded.",
+#     "responses": {
+#         "200": {
+#             "description": "Second signature image",
+#             "content": {
+#                 "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/png": {"schema": {"type": "string", "format": "binary"}},
+#                 "image/gif": {"schema": {"type": "string", "format": "binary"}}
+#             }
+#         },
+#         "404": {"description": "Signature not found"}
+#     }
+# })
+# def get_signature2():
+#     settings = CertificateSetting.get_or_create_for_course()
+#     if settings.signature2_data:
+#         return Response(settings.signature2_data, mimetype=settings.signature2_mime)
+#     return "", 404
 
 
 # -------------------------

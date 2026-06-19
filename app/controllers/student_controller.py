@@ -9,6 +9,19 @@ import os
 import re
 from ..utils.student_id_generator import generate_student_id
 from ..utils.certificate_number import generate_certificate_number
+from sqlalchemy import func
+from ..models.certificate_setting import CertificateSetting
+
+def get_missing_course_templates(course_names):
+    """Return a list of course names that do not have a template (case-insensitive)."""
+    missing = []
+    for name in set(course_names):
+        exists = CertificateSetting.query.filter(
+            func.lower(CertificateSetting.course_name) == func.lower(name)
+        ).first()
+        if not exists:
+            missing.append(name)
+    return missing
 
 
 def parse_flexible_date(date_str, year_str):
@@ -216,7 +229,7 @@ def import_students_csv():
     filename = file.filename.lower()
     created_count = 0
     errors = []
-    rows = []          # <-- define rows here
+    rows = []
     detected_columns = {}
 
     try:
@@ -287,6 +300,24 @@ def import_students_csv():
 
         if not name_col:
             return {"message": "No name column found", "detected_columns": detected_columns}, 400
+
+        # ---------- NEW: Check that all courses have templates ----------
+        unique_courses = set()
+        for row in rows:
+            course = default_course
+            if programme_col:
+                file_course = str(row.get(programme_col, '')).strip()
+                if file_course:
+                    course = file_course
+            unique_courses.add(course)
+
+        missing = get_missing_course_templates(unique_courses)
+        if missing:
+            return {
+                "message": "Import rejected: certificate templates missing for the following courses. Please create them first.",
+                "missing_courses": missing,
+                "detected_columns": detected_columns
+            }, 400
 
         # ---------- Process rows ----------
         for idx, row in enumerate(rows, start=1):
@@ -397,32 +428,29 @@ def import_students_csv():
     except Exception as e:
         db.session.rollback()
         return {"message": f"Processing failed: {str(e)}"}, 500
-
-
-
+    
+    
 # def import_students_csv():
 #     file = request.files.get("file")
 #     if not file:
 #         return {"message": "No file provided"}, 400
 
 #     default_course = request.form.get("default_course", "").strip()
-#     if not default_course:
-#         return {"message": "Please provide a 'default_course' parameter"}, 400
-
 #     default_year = request.form.get("default_year", "2026").strip()
 
 #     filename = file.filename.lower()
 #     created_count = 0
 #     errors = []
+#     rows = []          # <-- define rows here
 #     detected_columns = {}
 
 #     try:
-#         # --- Read file (same as before, CSV or Excel) ---
+#         # ---------- Read file (CSV or Excel) ----------
 #         if filename.endswith('.csv'):
 #             filepath = os.path.join("tmp", file.filename)
 #             os.makedirs("tmp", exist_ok=True)
 #             file.save(filepath)
-#             # encoding detection
+
 #             encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
 #             data = None
 #             for enc in encodings:
@@ -434,12 +462,14 @@ def import_students_csv():
 #                     continue
 #             if data is None:
 #                 return {"message": "Could not decode CSV file"}, 400
+
 #             delimiter = ',' if ',' in data[:1000] else '\t' if '\t' in data[:1000] else ';'
 #             from io import StringIO
 #             stream = StringIO(data)
 #             reader = csv.DictReader(stream, delimiter=delimiter)
 #             rows = list(reader)
 #             os.remove(filepath)
+
 #         elif filename.endswith(('.xlsx', '.xls')):
 #             import pandas as pd
 #             df = pd.read_excel(file)
@@ -450,7 +480,7 @@ def import_students_csv():
 #         if not rows:
 #             return {"message": "No data found"}, 400
 
-#         # --- Column detection (only for name, phone, email) ---
+#         # ---------- Column detection ----------
 #         available = list(rows[0].keys())
 #         def find_column(patterns, default=None):
 #             for col in available:
@@ -463,11 +493,19 @@ def import_students_csv():
 #         name_col = find_column(['name', 'full', 'student', 'names'], available[0])
 #         phone_col = find_column(['phone', 'mobile', 'contact', 'phoneno'], None)
 #         email_col = find_column(['email', 'e-mail', 'mail'], None)
+#         programme_col = find_column(['programme', 'program', 'course'], None)
+#         start_date_col = find_column(['start', 'start date', 'begin'], None)
+#         end_date_col = find_column(['end', 'end date', 'finish'], None)
+#         year_col = find_column(['year'], None)
 
 #         detected_columns = {
 #             "name_column": name_col,
 #             "phone_column": phone_col,
 #             "email_column": email_col,
+#             "programme_column": programme_col,
+#             "start_date_column": start_date_col,
+#             "end_date_column": end_date_col,
+#             "year_column": year_col,
 #             "used_default_course": default_course,
 #             "used_default_year": default_year
 #         }
@@ -475,7 +513,7 @@ def import_students_csv():
 #         if not name_col:
 #             return {"message": "No name column found", "detected_columns": detected_columns}, 400
 
-#         # --- Process rows ---
+#         # ---------- Process rows ----------
 #         for idx, row in enumerate(rows, start=1):
 #             try:
 #                 full_name = str(row.get(name_col, '')).strip()
@@ -503,43 +541,68 @@ def import_students_csv():
 #                         email = f"{base.split('@')[0]}{counter}@speedlinkng.com"
 #                         counter += 1
 
-#                 # Create student (without student_id)
+#                 # Course name
+#                 course_name = default_course
+#                 if programme_col:
+#                     file_course = str(row.get(programme_col, '')).strip()
+#                     if file_course:
+#                         course_name = file_course
+
+#                 # Year of study
+#                 year_of_study = default_year
+#                 if year_col:
+#                     file_year = str(row.get(year_col, '')).strip()
+#                     if file_year:
+#                         year_of_study = file_year
+
+#                 # Start and End dates
+#                 start_date = None
+#                 end_date = None
+#                 if start_date_col and year_col:
+#                     start_str = str(row.get(start_date_col, '')).strip()
+#                     year_str = str(row.get(year_col, '')).strip()
+#                     if start_str and year_str:
+#                         start_date = parse_flexible_date(start_str, year_str)
+#                 if end_date_col and year_col:
+#                     end_str = str(row.get(end_date_col, '')).strip()
+#                     year_str = str(row.get(year_col, '')).strip()
+#                     if end_str and year_str:
+#                         end_date = parse_flexible_date(end_str, year_str)
+
+#                 # Create student
 #                 student = Student(
 #                     first_name=first_name,
 #                     last_name=last_name,
 #                     full_name=full_name,
 #                     email=email,
 #                     phone_number=phone,
-#                     course_name=default_course,   # always use default
-#                     year_of_study=default_year
+#                     course_name=course_name,
+#                     year_of_study=year_of_study,
+#                     program_start_date=start_date,
+#                     program_end_date=end_date
 #                 )
 #                 db.session.add(student)
-#                 db.session.flush()   # get student.id
+#                 db.session.flush()
 
-#                 # Generate student_id (with error fallback)
+#                 # Generate student_id
 #                 try:
 #                     from ..utils.student_id_generator import generate_student_id
-#                     student.student_id = generate_student_id(
-#                         year_of_study=default_year,
-#                         course_name=default_course
-#                     )
+#                     student.student_id = generate_student_id(year_of_study, course_name)
 #                 except Exception as e:
 #                     errors.append(f"Row {idx}: student_id generation failed - {str(e)}")
-#                     student.student_id = f"TEMP_{student.id}"   # fallback
+#                     student.student_id = f"TEMP_{student.id}"
 
-#                 # Create a certificate for this student
-#                 cert_num = generate_certificate_number(default_course, datetime.now().date())
-#                 # qr_url = generate_certificate_qr(full_name, default_course, cert_num, datetime.now().date())
+#                 # Create certificate
+#                 cert_num = generate_certificate_number(course_name, datetime.now().date())
 #                 cert = Certificate(
 #                     student_id=student.id,
 #                     student_first_name=first_name,
 #                     student_last_name=last_name,
 #                     student_full_name=full_name,
-#                     course_name=default_course,
-#                     course_summary=f"Certificate for {default_course}",
-#                     year_of_study=default_year,
+#                     course_name=course_name,
+#                     course_summary=f"Certificate for {course_name}",
+#                     year_of_study=year_of_study,
 #                     verification_code=cert_num,
-#                     # qr_code_url=qr_url,
 #                     issued_at=datetime.now().date()
 #                 )
 #                 db.session.add(cert)
@@ -560,7 +623,6 @@ def import_students_csv():
 #         db.session.rollback()
 #         return {"message": f"Processing failed: {str(e)}"}, 500
 
-       
 
 # -------------------------
 # DOWNLOAD SAMPLE STUDENT FILE

@@ -1,4 +1,6 @@
 # models/certificate_setting.py
+from sqlalchemy import func
+
 from ..extensions import db
 from datetime import datetime
 
@@ -41,13 +43,22 @@ class CertificateSetting(db.Model):
 
     @classmethod
     def get_or_create_for_course(cls, course_name):
-        """Fetch or create certificate settings for a given course name."""
-        instance = cls.query.filter_by(course_name=course_name).first()
-        if not instance:
-            instance = cls(course_name=course_name)
-            db.session.add(instance)
-            db.session.commit()
+        existing = cls.query.filter(func.lower(cls.course_name) == func.lower(course_name)).first()
+        if existing:
+            return existing
+        instance = cls(course_name=course_name)
+        db.session.add(instance)
+        db.session.commit()
         return instance
+    # def get_or_create_for_course(cls, course_name):
+    #     """Fetch or create certificate settings for a given course name."""
+    #     instance = cls.query.filter_by(course_name=course_name).first()
+    #     if not instance:
+    #         instance = cls(course_name=course_name)
+    #         db.session.add(instance)
+    #         db.session.commit()
+    #     return instance
+    
     # def get_instance(cls):
     #     instance = cls.query.first()
     #     if not instance:
