@@ -34,9 +34,10 @@ def get_certificate_settings():
         # If you prefer to return all:
         # all_settings = CertificateSetting.query.all()
         # return jsonify([serialize(s) for s in all_settings])
-    settings = CertificateSetting.get_instance()
+    settings = CertificateSetting.get_or_create_for_course(course_name)
     return jsonify({
         "course_name": settings.course_name,
+
         "logo_exists": bool(settings.logo_data),
         "logo_mime": settings.logo_mime,
         "logo2_exists": bool(settings.logo2_data),
