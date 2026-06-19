@@ -24,8 +24,19 @@ def _save_uploaded_file(file, folder="certificate_assets"):
 
 
 def get_certificate_settings():
+    course_name = request.args.get('course_name')
+    if not course_name:
+        # Option A: Return all settings for all courses (if admin needs a list)
+        # Option B: Use a default course name, e.g., 'Default'
+        # For simplicity, we'll return an error or a default template
+        # Let's use a default course name 'Default' if it exists, else create one.
+        course_name = 'Default'  # or return error
+        # If you prefer to return all:
+        # all_settings = CertificateSetting.query.all()
+        # return jsonify([serialize(s) for s in all_settings])
     settings = CertificateSetting.get_instance()
     return jsonify({
+        "course_name": settings.course_name,
         "logo_exists": bool(settings.logo_data),
         "logo_mime": settings.logo_mime,
         "logo2_exists": bool(settings.logo2_data),
@@ -48,8 +59,20 @@ def get_certificate_settings():
     })
 
 
-def update_certificate_settings():
-    settings = CertificateSetting.get_instance()
+def update_certificate_settings(course_name=None):
+
+    # If not provided in URL, try to get from request data
+    if course_name is None:
+        if request.content_type and 'application/json' in request.content_type:
+            data = request.get_json()
+            course_name = data.get('course_name')
+        else:
+            course_name = request.form.get('course_name')
+
+    if not course_name:
+        return jsonify({"error": "course_name is required"}), 400
+    
+    settings = CertificateSetting.get_or_create_for_course(course_name)
     
     # Handle JSON (text only)
     if request.content_type and 'application/json' in request.content_type:
@@ -65,7 +88,10 @@ def update_certificate_settings():
         settings.signature2_name = data.get('signature2_name', settings.signature2_name)
         settings.signature2_holder_position = data.get('signature2_holder_position', settings.signature2_holder_position)  # NEW
         db.session.commit()
-        return jsonify({"message": "Certificate settings updated", "settings": {
+        return jsonify({"message": "Certificate settings updated", 
+                        "course_name": course_name,
+                        
+                        "settings": {
             "title_text": settings.title_text,
             "Certificate_duration_text": settings.Certificate_duration_text,  # NEW
             "default_course_summary": settings.default_course_summary,
@@ -123,6 +149,7 @@ def update_certificate_settings():
     db.session.commit()
     return jsonify({
         "message": "Certificate settings updated successfully",
+        "course_name": course_name,
         "logo_exists": bool(settings.logo_data),
         "logo2_exists": bool(settings.logo2_data),
         "logo3_exists": bool(settings.logo3_data),

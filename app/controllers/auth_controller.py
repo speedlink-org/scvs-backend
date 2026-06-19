@@ -95,13 +95,3 @@ def login_user(data):
         return {"message": "Invalid email or password"}, 401
     
     
-# def login_user(data):
-#     email = data.get('email')
-#     password = data.get('password')
-
-#     user = User.query.filter_by(email=email).first()
-#     if user and user.check_password(password):
-#         token = create_access_token(identity={"id": user.id, "role": user.role})
-#         return {"access_token": token}
-#     else:
-#         return {"message": "Invalid credentials"}, 401

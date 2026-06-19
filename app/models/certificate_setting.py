@@ -6,6 +6,7 @@ class CertificateSetting(db.Model):
     __tablename__ = 'certificate_settings'
 
     id = db.Column(db.Integer, primary_key=True)
+    course_name = db.Column(db.String(255), unique=True, nullable=False)   # key
     
     # Image data as bytes
     logo_data = db.Column(db.LargeBinary, nullable=True)
@@ -39,11 +40,19 @@ class CertificateSetting(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     @classmethod
-    def get_instance(cls):
-        instance = cls.query.first()
+    def get_or_create_for_course(cls, course_name):
+        """Fetch or create certificate settings for a given course name."""
+        instance = cls.query.filter_by(course_name=course_name).first()
         if not instance:
-            instance = cls()
+            instance = cls(course_name=course_name)
             db.session.add(instance)
             db.session.commit()
         return instance
+    # def get_instance(cls):
+    #     instance = cls.query.first()
+    #     if not instance:
+    #         instance = cls()
+    #         db.session.add(instance)
+    #         db.session.commit()
+    #     return instance
 

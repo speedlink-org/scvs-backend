@@ -3,6 +3,7 @@ from ..controllers.admin_controller import list_admins, update_admin, delete_adm
 from flasgger import swag_from
 from ..models.certificate_setting import CertificateSetting
 from flask import Response
+from ..extensions import db
 
 admin_bp = Blueprint('admin_bp', __name__, url_prefix='/admin')
 
@@ -13,7 +14,7 @@ admin_bp = Blueprint('admin_bp', __name__, url_prefix='/admin')
 @admin_bp.get("/certificate-settings")
 @swag_from({
     "tags": ["Admin Management"],
-    "summary": "Get current certificate template settings",
+    "summary": "Get current certificate template settings, add query parameter like - ?course_name=Web%20Development to get base on course name",
     "responses": {
         "200": {"description": "Settings retrieved successfully"}
     }
@@ -24,7 +25,7 @@ def get_certificate_settings_route():
 # -------------------------
 # UPDATE CERTIFICATE SETTINGS (PATCH)
 # -------------------------
-@admin_bp.patch("/certificate-settings")
+@admin_bp.patch("/certificate-settings/<course_name>")
 @swag_from({
     "tags": ["Admin Management"],
     "summary": "Partially update certificate template settings",
@@ -91,8 +92,29 @@ def get_certificate_settings_route():
         "400": {"description": "Invalid input"}
     }
 })
-def update_certificate_settings_route():
-    return update_certificate_settings()
+def update_certificate_settings_route(course_name):
+    return update_certificate_settings(course_name)
+
+@admin_bp.get('/certificate-settings/courses')
+@swag_from({
+    "tags": ["Admin Management"],
+    "summary": "Get List of course names with templates",
+    "description": "Return list of all course names that have certificate settings.",
+    "responses": {
+        "200": {
+            "description": "Course list",
+            # "content": {
+                
+            # }
+        },
+        "404": {"description": "Logo not found"}
+    }
+})
+def get_certificate_courses():
+    """Return list of all course names that have certificate settings."""
+    courses = db.session.query(CertificateSetting.course_name).distinct().all()
+    course_list = [c[0] for c in courses]
+    return jsonify({"courses": course_list})
 
 
 # image display routes (logo / signatures)
