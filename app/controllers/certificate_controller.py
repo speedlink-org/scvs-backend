@@ -4,14 +4,14 @@ from ..extensions import db
 from ..models.certificate import Certificate
 from ..models.student import Student
 from ..utils.certificate_number import generate_certificate_number
-from ..utils.qr_generator import generate_certificate_qr
+# from ..utils.qr_generator import generate_certificate_qr
 import csv
 from io import StringIO
 import pandas as pd
 from io import BytesIO, StringIO
 from datetime import datetime
 import re
-from ..utils.google_drive_simple import drive_service 
+# from ..utils.google_drive_simple import drive_service 
 import os
 from datetime import datetime
 
@@ -130,7 +130,7 @@ def create_certificate():
 
     # Generate certificate number and QR
     certificate_number = generate_certificate_number(course_name, issuance_date)
-    qr_url = generate_certificate_qr(full_name, course_name, certificate_number, issuance_date)
+    # qr_url = generate_certificate_qr(full_name, course_name, certificate_number, issuance_date)
 
     cert = Certificate(
         student_id=student.id,
@@ -141,7 +141,7 @@ def create_certificate():
         course_summary=course_summary,
         year_of_study=year_of_study,
         verification_code=certificate_number,
-        qr_code_url=qr_url,
+        # qr_code_url=qr_url,
         issued_at=issuance_date,
     )
 
@@ -153,7 +153,7 @@ def create_certificate():
         "certificate_number": certificate_number,
         "student_id": student.id,
         "student_full_name": full_name,
-        "qr_code_url": qr_url
+        # "qr_code_url": qr_url
     }), 201
 
 
@@ -356,8 +356,8 @@ def delete_certificate(code):
     cert = Certificate.query.get_or_404(code)
 
     # Delete QR code from Google Drive
-    if cert.qr_code_url and 'google.com' in cert.qr_code_url:
-        drive_service.delete_file_by_url(cert.qr_code_url)
+    # if cert.qr_code_url and 'google.com' in cert.qr_code_url:
+    #     drive_service.delete_file_by_url(cert.qr_code_url)
 
     db.session.delete(cert)
     db.session.commit()
