@@ -11,6 +11,8 @@ from ..utils.student_id_generator import generate_student_id
 from ..utils.certificate_number import generate_certificate_number
 from sqlalchemy import func
 from ..models.certificate_setting import CertificateSetting
+from sqlalchemy.exc import IntegrityError
+
 
 def get_missing_course_templates(course_names):
     """Return a list of course names that do not have a template (case-insensitive)."""
@@ -78,88 +80,209 @@ def list_students():
 # -------------------------
 def create_student():
     try:
-        data = request.json
-        
-        # Handle name fields: support full_name or first/last
+        data = request.get_json(silent=True)
+        if not data:
+            return {"error": "Invalid or missing JSON body (Content-Type: application/json)"}, 400
+
+        # -------- Names --------
         full_name = data.get("full_name")
         first_name = data.get("first_name")
         last_name = data.get("last_name")
-        
+
         if full_name:
-            parts = full_name.strip().split(' ', 1)
+            parts = full_name.strip().split(" ", 1)
             first_name = parts[0]
             last_name = parts[1] if len(parts) > 1 else ""
+            full_name = f"{first_name} {last_name}".strip()
         elif not first_name or not last_name:
             return {"error": "Either full_name or both first_name and last_name are required"}, 400
         else:
             full_name = f"{first_name} {last_name}".strip()
-        
+
+        # -------- Email --------
         email = data.get("email")
         if not email:
             return {"error": "Email is required"}, 400
-        
-        # Check for existing student by email or full_name
+
+        # -------- Duplicate check --------
         existing = Student.query.filter(
             (Student.email == email) | (Student.full_name == full_name)
         ).first()
         if existing:
             return {
                 "error": "Student with this email or full name already exists",
-                "student_id": existing.student_id
+                "student_id": existing.student_id,
             }, 400
-        
-        # Parse dates
+
+        # -------- Dates --------
         program_start_date = None
         program_end_date = None
         if data.get("program_start_date"):
             try:
-                program_start_date = datetime.strptime(data["program_start_date"], '%Y-%m-%d').date()
+                program_start_date = datetime.strptime(
+                    data["program_start_date"], "%Y-%m-%d"
+                ).date()
             except ValueError:
                 return {"error": "Invalid program_start_date format. Use YYYY-MM-DD"}, 400
         if data.get("program_end_date"):
             try:
-                program_end_date = datetime.strptime(data["program_end_date"], '%Y-%m-%d').date()
+                program_end_date = datetime.strptime(
+                    data["program_end_date"], "%Y-%m-%d"
+                ).date()
             except ValueError:
                 return {"error": "Invalid program_end_date format. Use YYYY-MM-DD"}, 400
-        
-        # Create student object (without student_id yet)
-        student = Student(
-            first_name=first_name,
-            last_name=last_name,
-            full_name=full_name,
-            email=email,
-            phone_number=data.get("phone_number"),
-            course_name=data.get("course_name"),
-            year_of_study=data.get("year_of_study"),
-            program_start_date=program_start_date,
-            program_end_date=program_end_date,
-            photo_url=data.get("photo_url")
-        )
-        
-        db.session.add(student)
-        db.session.flush()  # Get student.id before generating ID
-        
-        # Generate student_id (may depend on course_name, year_of_study)
-        student.student_id = generate_student_id(
-            year_of_study=student.year_of_study,
-            course_name=student.course_name
-        )
-        
-        db.session.commit()
-        
+
+        # -------- Other fields --------
+        course_name = data.get("course_name")
+        year_of_study = data.get("year_of_study")
+
+        # -------- Generate ID + Insert (with retry for race conditions) --------
+        MAX_ATTEMPTS = 5
+        last_error = None
+
+        for attempt in range(MAX_ATTEMPTS):
+            try:
+                new_student_id = generate_student_id(
+                    year_of_study=year_of_study,
+                    course_name=course_name,
+                )
+
+                student = Student(
+                    student_id=new_student_id,
+                    first_name=first_name,
+                    last_name=last_name,
+                    full_name=full_name,
+                    email=email,
+                    phone_number=data.get("phone_number"),
+                    course_name=course_name,
+                    year_of_study=year_of_study,
+                    program_start_date=program_start_date,
+                    program_end_date=program_end_date,
+                    photo_url=data.get("photo_url"),
+                )
+
+                db.session.add(student)
+                db.session.commit()
+
+                return {
+                    "message": "Student created successfully",
+                    "student_id": student.student_id,
+                    "student": {
+                        "full_name": student.full_name,
+                        "email": student.email,
+                        "course_name": student.course_name,
+                    },
+                }, 201
+
+            except IntegrityError as ie:
+                db.session.rollback()
+                last_error = ie
+                err_str = str(getattr(ie, "orig", ie))
+
+                # Only retry if it's the student_id collision (race condition).
+                # Email collision → return the 400 we already handle above.
+                if "students_student_id_key" in err_str and attempt < MAX_ATTEMPTS - 1:
+                    continue
+                if "students_email_key" in err_str:
+                    return {"error": "A student with this email already exists"}, 400
+                raise
+
         return {
-            "message": "Student created successfully",
-            "student_id": student.student_id,
-            "student": {
-                "full_name": student.full_name,
-                "email": student.email,
-                "course_name": student.course_name
-            }
-        }, 201
-    
+            "error": "Could not generate a unique student_id after several attempts",
+            "detail": str(last_error) if last_error else None,
+        }, 500
+
     except Exception as e:
         db.session.rollback()
         return {"error": f"Failed to create student: {str(e)}"}, 500
+    
+# # -------------------------
+# # CREATE STUDENT
+# # -------------------------
+# def create_student():
+#     try:
+#         data = request.json
+        
+#         # Handle name fields: support full_name or first/last
+#         full_name = data.get("full_name")
+#         first_name = data.get("first_name")
+#         last_name = data.get("last_name")
+        
+#         if full_name:
+#             parts = full_name.strip().split(' ', 1)
+#             first_name = parts[0]
+#             last_name = parts[1] if len(parts) > 1 else ""
+#         elif not first_name or not last_name:
+#             return {"error": "Either full_name or both first_name and last_name are required"}, 400
+#         else:
+#             full_name = f"{first_name} {last_name}".strip()
+        
+#         email = data.get("email")
+#         if not email:
+#             return {"error": "Email is required"}, 400
+        
+#         # Check for existing student by email or full_name
+#         existing = Student.query.filter(
+#             (Student.email == email) | (Student.full_name == full_name)
+#         ).first()
+#         if existing:
+#             return {
+#                 "error": "Student with this email or full name already exists",
+#                 "student_id": existing.student_id
+#             }, 400
+        
+#         # Parse dates
+#         program_start_date = None
+#         program_end_date = None
+#         if data.get("program_start_date"):
+#             try:
+#                 program_start_date = datetime.strptime(data["program_start_date"], '%Y-%m-%d').date()
+#             except ValueError:
+#                 return {"error": "Invalid program_start_date format. Use YYYY-MM-DD"}, 400
+#         if data.get("program_end_date"):
+#             try:
+#                 program_end_date = datetime.strptime(data["program_end_date"], '%Y-%m-%d').date()
+#             except ValueError:
+#                 return {"error": "Invalid program_end_date format. Use YYYY-MM-DD"}, 400
+        
+#         # Create student object (without student_id yet)
+#         student = Student(
+#             first_name=first_name,
+#             last_name=last_name,
+#             full_name=full_name,
+#             email=email,
+#             phone_number=data.get("phone_number"),
+#             course_name=data.get("course_name"),
+#             year_of_study=data.get("year_of_study"),
+#             program_start_date=program_start_date,
+#             program_end_date=program_end_date,
+#             photo_url=data.get("photo_url")
+#         )
+        
+#         db.session.add(student)
+#         db.session.flush()  # Get student.id before generating ID
+        
+#         # Generate student_id (may depend on course_name, year_of_study)
+#         student.student_id = generate_student_id(
+#             year_of_study=student.year_of_study,
+#             course_name=student.course_name
+#         )
+        
+#         db.session.commit()
+        
+#         return {
+#             "message": "Student created successfully",
+#             "student_id": student.student_id,
+#             "student": {
+#                 "full_name": student.full_name,
+#                 "email": student.email,
+#                 "course_name": student.course_name
+#             }
+#         }, 201
+    
+#     except Exception as e:
+#         db.session.rollback()
+#         return {"error": f"Failed to create student: {str(e)}"}, 500
    
 # -------------------------
 # UPDATE STUDENT
@@ -430,199 +553,6 @@ def import_students_csv():
         return {"message": f"Processing failed: {str(e)}"}, 500
     
     
-# def import_students_csv():
-#     file = request.files.get("file")
-#     if not file:
-#         return {"message": "No file provided"}, 400
-
-#     default_course = request.form.get("default_course", "").strip()
-#     default_year = request.form.get("default_year", "2026").strip()
-
-#     filename = file.filename.lower()
-#     created_count = 0
-#     errors = []
-#     rows = []          # <-- define rows here
-#     detected_columns = {}
-
-#     try:
-#         # ---------- Read file (CSV or Excel) ----------
-#         if filename.endswith('.csv'):
-#             filepath = os.path.join("tmp", file.filename)
-#             os.makedirs("tmp", exist_ok=True)
-#             file.save(filepath)
-
-#             encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252', 'windows-1252']
-#             data = None
-#             for enc in encodings:
-#                 try:
-#                     with open(filepath, 'r', encoding=enc) as f:
-#                         data = f.read()
-#                     break
-#                 except UnicodeDecodeError:
-#                     continue
-#             if data is None:
-#                 return {"message": "Could not decode CSV file"}, 400
-
-#             delimiter = ',' if ',' in data[:1000] else '\t' if '\t' in data[:1000] else ';'
-#             from io import StringIO
-#             stream = StringIO(data)
-#             reader = csv.DictReader(stream, delimiter=delimiter)
-#             rows = list(reader)
-#             os.remove(filepath)
-
-#         elif filename.endswith(('.xlsx', '.xls')):
-#             import pandas as pd
-#             df = pd.read_excel(file)
-#             rows = df.replace({pd.NA: None, float('nan'): None}).to_dict('records')
-#         else:
-#             return {"message": "Unsupported file format"}, 400
-
-#         if not rows:
-#             return {"message": "No data found"}, 400
-
-#         # ---------- Column detection ----------
-#         available = list(rows[0].keys())
-#         def find_column(patterns, default=None):
-#             for col in available:
-#                 col_lower = col.lower().strip()
-#                 for pat in patterns:
-#                     if pat in col_lower:
-#                         return col
-#             return default
-
-#         name_col = find_column(['name', 'full', 'student', 'names'], available[0])
-#         phone_col = find_column(['phone', 'mobile', 'contact', 'phoneno'], None)
-#         email_col = find_column(['email', 'e-mail', 'mail'], None)
-#         programme_col = find_column(['programme', 'program', 'course'], None)
-#         start_date_col = find_column(['start', 'start date', 'begin'], None)
-#         end_date_col = find_column(['end', 'end date', 'finish'], None)
-#         year_col = find_column(['year'], None)
-
-#         detected_columns = {
-#             "name_column": name_col,
-#             "phone_column": phone_col,
-#             "email_column": email_col,
-#             "programme_column": programme_col,
-#             "start_date_column": start_date_col,
-#             "end_date_column": end_date_col,
-#             "year_column": year_col,
-#             "used_default_course": default_course,
-#             "used_default_year": default_year
-#         }
-
-#         if not name_col:
-#             return {"message": "No name column found", "detected_columns": detected_columns}, 400
-
-#         # ---------- Process rows ----------
-#         for idx, row in enumerate(rows, start=1):
-#             try:
-#                 full_name = str(row.get(name_col, '')).strip()
-#                 if not full_name:
-#                     errors.append(f"Row {idx}: empty name")
-#                     continue
-
-#                 # Split name
-#                 parts = full_name.split(maxsplit=1)
-#                 first_name = parts[0]
-#                 last_name = parts[1] if len(parts) > 1 else ""
-
-#                 # Phone
-#                 phone = str(row.get(phone_col, '')).strip() if phone_col else None
-#                 if phone in ('', 'None'): phone = None
-
-#                 # Email
-#                 if email_col:
-#                     email = str(row.get(email_col, '')).strip()
-#                 else:
-#                     base = f"{first_name.lower()}.{last_name.lower().replace(' ', '')}@speedlinkng.com"
-#                     email = base
-#                     counter = 1
-#                     while Student.query.filter_by(email=email).first():
-#                         email = f"{base.split('@')[0]}{counter}@speedlinkng.com"
-#                         counter += 1
-
-#                 # Course name
-#                 course_name = default_course
-#                 if programme_col:
-#                     file_course = str(row.get(programme_col, '')).strip()
-#                     if file_course:
-#                         course_name = file_course
-
-#                 # Year of study
-#                 year_of_study = default_year
-#                 if year_col:
-#                     file_year = str(row.get(year_col, '')).strip()
-#                     if file_year:
-#                         year_of_study = file_year
-
-#                 # Start and End dates
-#                 start_date = None
-#                 end_date = None
-#                 if start_date_col and year_col:
-#                     start_str = str(row.get(start_date_col, '')).strip()
-#                     year_str = str(row.get(year_col, '')).strip()
-#                     if start_str and year_str:
-#                         start_date = parse_flexible_date(start_str, year_str)
-#                 if end_date_col and year_col:
-#                     end_str = str(row.get(end_date_col, '')).strip()
-#                     year_str = str(row.get(year_col, '')).strip()
-#                     if end_str and year_str:
-#                         end_date = parse_flexible_date(end_str, year_str)
-
-#                 # Create student
-#                 student = Student(
-#                     first_name=first_name,
-#                     last_name=last_name,
-#                     full_name=full_name,
-#                     email=email,
-#                     phone_number=phone,
-#                     course_name=course_name,
-#                     year_of_study=year_of_study,
-#                     program_start_date=start_date,
-#                     program_end_date=end_date
-#                 )
-#                 db.session.add(student)
-#                 db.session.flush()
-
-#                 # Generate student_id
-#                 try:
-#                     from ..utils.student_id_generator import generate_student_id
-#                     student.student_id = generate_student_id(year_of_study, course_name)
-#                 except Exception as e:
-#                     errors.append(f"Row {idx}: student_id generation failed - {str(e)}")
-#                     student.student_id = f"TEMP_{student.id}"
-
-#                 # Create certificate
-#                 cert_num = generate_certificate_number(course_name, datetime.now().date())
-#                 cert = Certificate(
-#                     student_id=student.id,
-#                     student_first_name=first_name,
-#                     student_last_name=last_name,
-#                     student_full_name=full_name,
-#                     course_name=course_name,
-#                     course_summary=f"Certificate for {course_name}",
-#                     year_of_study=year_of_study,
-#                     verification_code=cert_num,
-#                     issued_at=datetime.now().date()
-#                 )
-#                 db.session.add(cert)
-#                 created_count += 1
-
-#             except Exception as e:
-#                 errors.append(f"Row {idx}: {str(e)}")
-#                 continue
-
-#         db.session.commit()
-#         return {
-#             "message": f"Imported {created_count} students with certificates",
-#             "errors": errors,
-#             "detected_columns": detected_columns
-#         }
-
-#     except Exception as e:
-#         db.session.rollback()
-#         return {"message": f"Processing failed: {str(e)}"}, 500
-
 
 # -------------------------
 # DOWNLOAD SAMPLE STUDENT FILE
